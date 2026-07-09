@@ -127,16 +127,65 @@ export default function Chat() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/chat`, {
+      // Crisis keywords detection list (Indonesian)
+      const CRISIS_KEYWORDS = [
+        'bunuh diri',
+        'akhiri hidup',
+        'akhiri hidupku',
+        'ingin mati',
+        'pengen mati',
+        'pengin mati',
+        'mau mati',
+        'menyakiti diri',
+        'sayat tangan',
+        'potong nadi',
+        'gantung diri',
+        'minum racun',
+        'lompat dari gedung',
+        'nyilet',
+        'suicide',
+        'self harm',
+        'menabrakkan diri'
+      ];
+      const checkCrisis = (text: string): boolean => {
+        const cleanText = text.toLowerCase();
+        return CRISIS_KEYWORDS.some(keyword => cleanText.includes(keyword));
+      };
+
+      // 1. CRISIS DETECTION (SAFETY LAYER)
+      if (checkCrisis(userText)) {
+        const crisisReply = 'Maafkan aku ya, tapi sepertinya kamu sedang melewati masa yang sangat berat saat ini. Aku sangat peduli padamu, tapi aku hanyalah AI pendamping. Tolong hubungi layanan darurat SEJIWA dengan menekan tombol darurat merah atau kontak profesional kesehatan jiwa Indonesia sekarang juga. Kamu tidak sendirian.';
+        
+        // Save flagged message to db
+        await supabase.from('chat_messages').insert([
+          { user_id: session?.user?.id, role: 'user', content: userText, flagged_crisis: true },
+          { user_id: session?.user?.id, role: 'assistant', content: crisisReply, flagged_crisis: true }
+        ]);
+
+        setShowCrisisModal(true);
+        setMascotState('sad');
+        await fetchChatHistory();
+        return;
+      }
+
+      // Save user message to database
+      await supabase.from('chat_messages').insert({
+        user_id: session?.user?.id,
+        role: 'user',
+        content: userText,
+        flagged_crisis: false
+      });
+
+      // Call n8n webhook
+      const response = await fetch('https://dindon.app.n8n.cloud/webhook/mindfullnessx1', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           message: userText,
+          userId: session?.user?.id,
           history: messages.filter(m => m.id !== 'init').map(m => ({
             role: m.role,
             content: m.content
@@ -145,23 +194,37 @@ export default function Chat() {
       });
 
       if (!response.ok) {
-        let detail = '';
-        try {
-          detail = (await response.json()).error || '';
-        } catch { /* body was not JSON */ }
-        console.error(`Chat server error ${response.status}:`, detail);
         throw new Error('server');
       }
 
-      const data = await response.json();
-
-      if (data.flagged_crisis) {
-        setShowCrisisModal(true);
-        setMascotState('sad');
+      let replyText = '';
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const first = data[0];
+          replyText = first.output || first.reply || first.response || first.text || first.message || '';
+        } else {
+          replyText = data.output || data.reply || data.response || data.text || data.message || '';
+        }
       } else {
-        // Analyze mascot expression based on Jiwo's response
-        analyzeMascotExpression(data.reply);
+        replyText = await response.text();
       }
+
+      if (!replyText || !replyText.trim()) {
+        throw new Error('server');
+      }
+
+      // Save assistant reply to database
+      await supabase.from('chat_messages').insert({
+        user_id: session?.user?.id,
+        role: 'assistant',
+        content: replyText,
+        flagged_crisis: false
+      });
+
+      // Analyze mascot expression based on Jiwo's response
+      analyzeMascotExpression(replyText);
 
       // Re-fetch chat logs to sync state with database id values
       await fetchChatHistory();
