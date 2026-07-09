@@ -113,9 +113,17 @@ export default function Login() {
           />
         </div>
 
-        <h1 className="text-3xl font-extrabold text-jiwo-textDark tracking-tight font-sans" data-animate>
-          Jiwo.ai
-        </h1>
+        <div className="flex items-center gap-2.5 mt-2 mb-1" data-animate>
+          <img
+            src="/logo jiwo.png"
+            alt="Jiwo Logo"
+            draggable={false}
+            className="w-9 h-9 object-contain"
+          />
+          <h1 className="text-3xl font-extrabold text-jiwo-textDark tracking-tight font-sans">
+            Jiwo.ai
+          </h1>
+        </div>
         <p className="text-jiwo-textMuted text-sm text-center mt-1 mb-8" data-animate>
           Teman Jiwa yang Selalu Ada — Siap Peluk Saat Cemas
         </p>

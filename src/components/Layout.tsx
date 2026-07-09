@@ -111,9 +111,7 @@ export default function Layout() {
         {/* Header */}
         <header className="px-5 py-4 border-b border-jiwo-primaryLight/20 flex justify-between items-center bg-white/70 backdrop-blur sticky top-0 z-40">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-jiwo-primary/10 flex items-center justify-center text-jiwo-primary">
-              <Heart className="w-4.5 h-4.5 fill-current" />
-            </div>
+            <img src="/logo jiwo.png" alt="Jiwo Logo" className="w-8 h-8 object-contain" />
             <span className="font-extrabold text-lg text-jiwo-textDark tracking-tight">Jiwo.ai</span>
           </div>
 
