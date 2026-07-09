@@ -4,6 +4,7 @@ import { setSceneMood } from '@/lib/sceneMood';
 import { speak, stopSpeaking, ttsSupported } from '@/lib/tts';
 import JiwoMascot from '@/components/JiwoMascot';
 import JiwoFilm from '@/components/JiwoFilm';
+import SafePlaceScene from '@/components/SafePlaceScene';
 import SessionCard from '@/components/SessionCard';
 import { GUIDED_SESSIONS, type GuidedSession } from '@/data/guidedSessions';
 import { Eye, Wind, ChevronRight, Compass, Send, Volume2, VolumeX } from 'lucide-react';
@@ -80,12 +81,11 @@ export default function Visualization() {
     const tweens: gsap.core.Tween[] = [];
     if (guideMascotRef.current) {
       tweens.push(
-        gsap.to(guideMascotRef.current, {
-          x: gsap.utils.random(-26, 26),
-          rotation: gsap.utils.random(-5, 5),
-          duration: 1.4,
-          ease: 'sine.inOut',
-        })
+        gsap.fromTo(
+          guideMascotRef.current,
+          { y: 10, opacity: 0.7 },
+          { y: 0, opacity: 1, duration: 0.9, ease: 'power2.out' }
+        )
       );
     }
     if (promptCardRef.current) {
@@ -102,11 +102,12 @@ export default function Visualization() {
 
   const places = [
     {
-      title: 'Pantai Sanur, Bali',
+      title: 'Pantai',
+      theme: 'beach' as const,
       desc: 'Bayangkan pasir putih hangat di bawah telapak kakimu, deburan ombak berirama teratur, dan matahari pagi menyinari pundakmu.',
       prompts: [
         'Duduklah dengan santai dan tutup matamu perlahan...',
-        'Bayangkan kamu berdiri di tepi Pantai Sanur saat matahari terbit. Langit berwarna jingga lembut dan merah muda.',
+        'Bayangkan kamu berdiri di tepi pantai saat matahari terbit. Langit berwarna jingga lembut dan merah muda.',
         'Rasakan kehangatan pasir laut di telapak kakimu. Pasir itu menopang langkahmu dengan aman.',
         'Dengarkan suara ombak. Tarik napas saat ombak mendekat... Hembuskan saat ombak surut...',
         'Rasakan embusan angin laut yang menyapu pipimu secara lembut, membawa pergi sisa kecemasanmu.',
@@ -114,11 +115,12 @@ export default function Visualization() {
       ]
     },
     {
-      title: 'Hutan Hujan tropis, Kalimantan',
+      title: 'Hutan',
+      theme: 'forest' as const,
       desc: 'Bayangkan aroma tanah basah segar setelah hujan, gemercik air sungai kecil, dan rindang daun hijau membentengi pikiranmu.',
       prompts: [
         'Duduklah tegak namun santai, biarkan otot-otot tubuhmu lemas...',
-        'Bayangkan kamu sedang berjalan di setapak teduh di tengah hutan Kalimantan. Udara terasa sangat sejuk dan segar.',
+        'Bayangkan kamu sedang berjalan di setapak teduh di tengah hutan yang rindang. Udara terasa sangat sejuk dan segar.',
         'Hirup aroma petrichor (tanah basah setelah hujan) yang menenangkan. Tarik napas dalam... hembuskan...',
         'Dengarkan suara gemercik air sungai jernih di dekatmu dan kicauan burung yang saling bersahutan secara alami.',
         'Lihatlah pohon-pohon raksasa berdaun hijau lebat di sekelilingmu. Mereka ada di sini untuk melindungimu.',
@@ -377,9 +379,9 @@ export default function Visualization() {
                 {places[selectedPlace].title}
               </h2>
 
-              {/* Jiwo the guide: drifts to a new spot on every step */}
-              <div ref={guideMascotRef} className="w-40 h-40 origin-bottom select-none">
-                <JiwoMascot state={mascotState} scale={1.05} showAnimation={true} />
+              {/* Animated diorama: Jiwo at the beach / in the forest */}
+              <div ref={guideMascotRef} className="w-full flex justify-center select-none">
+                <SafePlaceScene theme={places[selectedPlace].theme} />
               </div>
 
               {/* Slide text card */}

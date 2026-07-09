@@ -18,7 +18,8 @@
       "PowerShell(npx -y supabase --version)",
       "PowerShell(npx -y supabase functions deploy chat --project-ref ahnchamqeyiqhfeezlxq --use-api)",
       "PowerShell(if \\($env:ANTHROPIC_API_KEY\\) { Write-Output \\(\"env key present, prefix: \" + $env:ANTHROPIC_API_KEY.Substring\\(0, [Math]::Min\\(10, $env:ANTHROPIC_API_KEY.Length\\)\\) + \"...\"\\) } else { Write-Output 'ANTHROPIC_API_KEY not in environment' })",
-      "PowerShell(npx -y supabase secrets list --project-ref ahnchamqeyiqhfeezlxq)"
+      "PowerShell(npx -y supabase secrets list --project-ref ahnchamqeyiqhfeezlxq)",
+      "PowerShell(& \"node_modules\\\\.bin\\\\tsc.cmd\" -b; Write-Output \"TSC exit=$LASTEXITCODE\")"
     ]
   }
 }
