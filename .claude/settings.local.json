@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:ANTHROPIC_API_KEY)",
+      "PowerShell(npm install three gsap)",
+      "PowerShell(npm install -D @types/three)",
+      "PowerShell(npm run build)",
+      "mcp__Claude_Preview__preview_start",
+      "PowerShell(npm run lint)",
+      "PowerShell(npx eslint src/components/three/CalmScene.tsx src/components/PageTransition.tsx src/lib/sceneMood.ts)",
+      "PowerShell(npx eslint src/components/JiwoMascot.tsx src/components/JiwoPeek.tsx src/pages/Visualization.tsx src/pages/SleepCompanion.tsx)",
+      "PowerShell(New-Item -ItemType Directory -Force \"animated-sites\\\\jiwo\\\\assets\" | Out-Null; foreach \\($n in @\\('happy','calm','sad','sleep'\\)\\) { Copy-Item \"public\\\\jiwo\\\\idle1.png\" \"animated-sites\\\\jiwo\\\\assets\\\\$n.png\" }; Get-ChildItem \"animated-sites\\\\jiwo\\\\assets\" | Select-Object Name, Length)",
+      "PowerShell(foreach \\($n in @\\('happy','calm','sad','sleep'\\)\\) { Copy-Item \"public\\\\jiwo\\\\$n.png\" \"animated-sites\\\\jiwo\\\\assets\\\\$n.png\" -Force }; Get-ChildItem \"animated-sites\\\\jiwo\\\\assets\" | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB\\)}})",
+      "PowerShell(Copy-Item \"animated-sites\\\\jiwo\\\\index.html\" \"public\\\\welcome\\\\index.html\" -Force)",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:5174/welcome/index.html\" -UseBasicParsing -TimeoutSec 10; Write-Output \"status=$\\($r.StatusCode\\) length=$\\($r.RawContentLength\\)\"; Write-Output \\($r.Content.Substring\\(0, 200\\)\\); $r2 = Invoke-WebRequest -Uri \"http://localhost:5174/welcome/assets/happy.png?v=2\" -UseBasicParsing -TimeoutSec 10 -Method Head; Write-Output \"happy.png status=$\\($r2.StatusCode\\) type=$\\($r2.Headers['Content-Type']\\)\")",
+      "PowerShell(Copy-Item \"public\\\\jiwo\\\\idle.png\" \"animated-sites\\\\jiwo\\\\assets\\\\idle.png\" -Force)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://ahnchamqeyiqhfeezlxq.supabase.co/functions/v1/chat\" -Method POST -UseBasicParsing -TimeoutSec 15 -ContentType \"application/json\" -Body '{}' } catch { $resp = $_.Exception.Response; Write-Output \"status=$\\([int]$resp.StatusCode\\)\"; $sr = New-Object IO.StreamReader\\($resp.GetResponseStream\\(\\)\\); Write-Output $sr.ReadToEnd\\(\\) })",
+      "PowerShell(npx -y supabase --version)",
+      "PowerShell(npx -y supabase functions deploy chat --project-ref ahnchamqeyiqhfeezlxq --use-api)",
+      "PowerShell(if \\($env:ANTHROPIC_API_KEY\\) { Write-Output \\(\"env key present, prefix: \" + $env:ANTHROPIC_API_KEY.Substring\\(0, [Math]::Min\\(10, $env:ANTHROPIC_API_KEY.Length\\)\\) + \"...\"\\) } else { Write-Output 'ANTHROPIC_API_KEY not in environment' })",
+      "PowerShell(npx -y supabase secrets list --project-ref ahnchamqeyiqhfeezlxq)"
+    ]
+  }
+}
