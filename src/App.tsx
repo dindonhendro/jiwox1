@@ -77,16 +77,16 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/journal" element={<Journal />} />
-            <Route path="/community" element={<Community />} />
+            <Route path="/tools/community" element={<Community />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/tools/consultation" element={<Consultation />} />
+            <Route path="/visualization" element={<Visualization />} />
           </Route>
 
           {/* Standalone Full-screen Calming Pages */}
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/rescue" element={<Rescue />} />
           <Route path="/tools/sleep" element={<SleepCompanion />} />
-          <Route path="/tools/visualization" element={<Visualization />} />
         </Route>
 
         {/* Fallback */}

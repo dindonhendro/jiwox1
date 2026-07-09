@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { supabase } from '@/lib/supabaseClient';
-import { Home, MessageCircle, BookOpen, AlertOctagon, Heart, LogOut, User, Trash2, Shield, Compass, Users, Sparkles } from 'lucide-react';
+import { Home, MessageCircle, BookOpen, AlertOctagon, Heart, LogOut, User, Trash2, Shield, Compass, Sparkles, Eye } from 'lucide-react';
 import CrisisModal from './CrisisModal';
 import PageTransition from './PageTransition';
 import JiwoPeek from './JiwoPeek';
@@ -236,15 +236,15 @@ export default function Layout() {
           </Link>
 
           <Link
-            to="/community"
+            to="/visualization"
             className={`flex flex-col items-center gap-1 p-1 text-4xs sm:text-xs font-semibold rounded-2xl transition duration-150 ${
-              isActive('/community') 
+              isActive('/visualization') 
                 ? 'text-jiwo-primary scale-105' 
                 : 'text-jiwo-textMuted hover:text-jiwo-textDark'
             }`}
           >
-            <Users className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
-            <span>Komunitas</span>
+            <Eye className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
+            <span>Visualisasi</span>
           </Link>
 
           <Link

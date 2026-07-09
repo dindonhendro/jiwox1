@@ -1,5 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { setSceneMood } from '@/lib/sceneMood';
 import { speak, stopSpeaking, ttsSupported } from '@/lib/tts';
@@ -7,13 +6,9 @@ import JiwoMascot from '@/components/JiwoMascot';
 import JiwoFilm from '@/components/JiwoFilm';
 import SessionCard from '@/components/SessionCard';
 import { GUIDED_SESSIONS, type GuidedSession } from '@/data/guidedSessions';
-import { X, Eye, Wind, ChevronRight, Compass, Send, Volume2, VolumeX } from 'lucide-react';
-
-// Lazy-loaded so three.js stays out of the critical bundle
-const CalmScene = lazy(() => import('@/components/three/CalmScene'));
+import { Eye, Wind, ChevronRight, Compass, Send, Volume2, VolumeX } from 'lucide-react';
 
 export default function Visualization() {
-  const navigate = useNavigate();
   const [activeMode, setActiveMode] = useState<'safe_place' | 'release'>('safe_place');
   const [mascotState, setMascotState] = useState<'idle' | 'happy' | 'calm' | 'stress' | 'sad' | 'sleep'>('idle');
   const guideMascotRef = useRef<HTMLDivElement>(null);
@@ -210,22 +205,10 @@ export default function Visualization() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between p-6 relative font-sans">
-      {/* Ambient Three.js aurora + particle scene */}
-      <Suspense fallback={null}>
-        <CalmScene />
-      </Suspense>
-
+    <div className="flex flex-col justify-between min-h-[calc(100vh-170px)] relative font-sans py-4">
       {/* Top Header */}
       <div className="flex justify-between items-center w-full z-10 shrink-0">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate('/tools')}
-            className="p-2.5 rounded-full bg-white border border-jiwo-primaryLight/35 hover:bg-jiwo-bg transition text-jiwo-textMuted hover:text-jiwo-primary"
-            aria-label="Tutup"
-          >
-            <X className="w-5 h-5" />
-          </button>
 
           {/* Free browser-native TTS: Jiwo reads every guided prompt aloud */}
           {ttsSupported() && (

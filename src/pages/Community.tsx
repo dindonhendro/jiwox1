@@ -12,7 +12,8 @@ import {
   CheckCircle2, 
   RefreshCw, 
   AlertTriangle,
-  Heart
+  Heart,
+  ArrowLeft
 } from 'lucide-react';
 
 interface Comment {
@@ -334,14 +335,23 @@ export default function Community() {
 
   return (
     <div className="space-y-6 animate-fade-in font-sans pb-8">
-      {/* Title */}
-      <div className="text-center space-y-1">
-        <h1 className="text-2xl font-extrabold text-jiwo-textDark tracking-tight flex items-center justify-center gap-2">
-          <Users className="w-6 h-6 text-jiwo-primary" /> Komunitas Jiwo
-        </h1>
-        <p className="text-xs text-jiwo-textMuted max-w-xs mx-auto">
-          Tempat aman berbagi rasa dan tumbuh bersama sahabat Jiwo lainnya.
-        </p>
+      {/* Header with back navigation */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => navigate('/tools')}
+          className="p-2 rounded-full bg-white border border-jiwo-primaryLight/40 hover:bg-jiwo-bg text-jiwo-textMuted hover:text-jiwo-primary transition"
+          aria-label="Kembali"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="space-y-0.5">
+          <h1 className="text-xl font-extrabold text-jiwo-textDark tracking-tight flex items-center gap-1.5">
+            <Users className="w-5.5 h-5.5 text-jiwo-primary" /> Komunitas Jiwo
+          </h1>
+          <p className="text-xs text-jiwo-textMuted">
+            Tempat aman berbagi rasa dan tumbuh bersama sahabat Jiwo lainnya.
+          </p>
+        </div>
       </div>
 
       {/* Tabs */}

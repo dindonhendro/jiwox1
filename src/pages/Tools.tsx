@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Moon, Eye, UserCheck, Wind, ChevronRight, Heart } from 'lucide-react';
+import { Moon, UserCheck, Wind, ChevronRight, Heart, Users } from 'lucide-react';
 
 export default function Tools() {
   const navigate = useNavigate();
@@ -15,13 +15,13 @@ export default function Tools() {
       action: () => navigate('/tools/sleep')
     },
     {
-      id: 'visualization',
-      title: 'Bayang Jiwo',
-      subtitle: 'Guided Visualization',
-      desc: 'Latihan imajinasi terpadu tempat aman dan pelepasan kecemasan bersama maskot Jiwo.',
-      icon: Eye,
+      id: 'community',
+      title: 'Komunitas Jiwo',
+      subtitle: 'Support Group & Sharing',
+      desc: 'Berbagi cerita, keluh kesah, dan saling menguatkan bersama ribuan sahabat Jiwo lainnya.',
+      icon: Users,
       color: 'bg-jiwo-primary/10 text-jiwo-primary border-jiwo-primary/20',
-      action: () => navigate('/tools/visualization')
+      action: () => navigate('/tools/community')
     },
     {
       id: 'consultation',
