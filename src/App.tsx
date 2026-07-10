@@ -14,6 +14,7 @@ import SleepCompanion from '@/pages/SleepCompanion';
 import Visualization from '@/pages/Visualization';
 import Consultation from '@/pages/Consultation';
 import Community from '@/pages/Community';
+import MoodStats from '@/pages/MoodStats';
 
 // The animated landing lives as a static file outside the SPA. Any /welcome
 // variant that reaches the router gets forwarded to the real file so the
@@ -79,6 +80,7 @@ export default function App() {
             <Route path="/journal" element={<Journal />} />
             <Route path="/tools/community" element={<Community />} />
             <Route path="/tools" element={<Tools />} />
+            <Route path="/tools/stats" element={<MoodStats />} />
             <Route path="/tools/consultation" element={<Consultation />} />
             <Route path="/visualization" element={<Visualization />} />
           </Route>

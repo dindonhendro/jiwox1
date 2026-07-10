@@ -1,10 +1,19 @@
 import { useNavigate } from 'react-router-dom';
-import { Moon, UserCheck, Wind, ChevronRight, Heart, Users } from 'lucide-react';
+import { Moon, UserCheck, Wind, ChevronRight, Heart, Users, LineChart } from 'lucide-react';
 
 export default function Tools() {
   const navigate = useNavigate();
 
   const toolItems = [
+    {
+      id: 'stats',
+      title: 'Peta Hati Kamu',
+      subtitle: 'Statistik Mood',
+      desc: 'Lihat ragam perasaan & alur ketenanganmu dalam 7, 30, atau 90 hari terakhir — santai, bukan angka kaku.',
+      icon: LineChart,
+      color: 'bg-jiwo-happy/15 text-jiwo-happy border-jiwo-happy/25',
+      action: () => navigate('/tools/stats')
+    },
     {
       id: 'sleep',
       title: 'Tidur Nyenyak',
