@@ -111,8 +111,14 @@ Deno.serve(async (req) => {
 
     const userName = profile?.nama || 'Sahabat';
 
-    // 2. RAG AUGMENTATION (IF AVAILABLE)
+    // 2. RAG RETRIEVAL — find knowledge chunks relevant to the message
     let ragContext = '';
+    let matchedCount = 0;
+    // Note: with gte-small on Indonesian text, cosine similarity is compressed
+    // and non-discriminative (~0.83–0.90 for both relevant and irrelevant
+    // queries), so a similarity threshold cannot tell "grounded" from "not".
+    // Instead we let the model self-report actual reference usage via a hidden
+    // [[GROUNDED]] tag (detected after generation below).
     try {
       // Generate embedding for query using native gte-small model
       // @ts-ignore
@@ -122,16 +128,18 @@ Deno.serve(async (req) => {
         normalize: true,
       });
 
-      // Query database for similar chunks
+      // Query database for similar chunks. Threshold lowered to 0.45 for better
+      // recall on Indonesian text with gte-small; take up to 4 chunks.
       const { data: matchedChunks, error: rpcError } = await supabase.rpc('match_rag_chunks', {
         query_embedding: Array.from(queryEmbedding),
-        match_threshold: 0.6,
-        match_count: 3
+        match_threshold: 0.45,
+        match_count: 4
       });
 
       if (rpcError) {
         console.error('RPC match_rag_chunks error:', rpcError);
       } else if (matchedChunks && matchedChunks.length > 0) {
+        matchedCount = matchedChunks.length;
         console.log(`Matched ${matchedChunks.length} chunks from RAG.`);
         ragContext = matchedChunks
           .map((c: any, index: number) => `[Referensi ${index + 1}]:\n${c.content}`)
@@ -155,7 +163,15 @@ Deno.serve(async (req) => {
       3. Jika pengguna menunjukkan kecemasan, berikan validasi emosi mereka secara hangat, lalu ajak mereka untuk melakukan latihan pernapasan (sesi Rescue) di aplikasi ini.
       4. Jangan pernah berhalusinasi atau memberikan saran medis jika tidak yakin. Mengakulah dengan jujur bahwa Anda adalah pendamping AI yang terbatas.
       5. Panggil nama pengguna: ${userName} untuk membangun kedekatan emosional.
-      ${ragContext ? `\nInformasi referensi tepercaya untuk merespons:\n${ragContext}\n` : ''}
+
+      Aturan Sumber Jawaban (PENTING):
+      6. Untuk pertanyaan yang meminta INFORMASI, FAKTA, TEKNIK, atau SARAN, utamakan dan bersandar pada "Informasi referensi" di bawah. Jika informasi yang diminta TIDAK ADA di referensi, JANGAN mengarang atau mengambil dari pengetahuan umum — akui dengan jujur dan hangat bahwa kamu belum punya bahannya di catatanmu, lalu tawarkan menemani atau mengarahkan ke fitur aplikasi (Rescue, Jurnal, Visualisasi).
+      7. Untuk curhat, sapaan, atau dukungan emosional, kamu TETAP boleh merespons penuh empati walau tanpa referensi. Kehangatan tidak butuh sumber.
+      8. Saat memakai isi referensi, sampaikan kembali dengan bahasamu sendiri yang hangat dan mudah dipahami — jangan menyalin mentah-mentah.
+      9. PENANDA (WAJIB): Jika jawabanmu benar-benar mengambil isi dari "Informasi referensi" di atas, tuliskan tepat token [[GROUNDED]] di baris paling akhir jawabanmu. Jika jawabanmu TIDAK memakai referensi (sekadar empati, sapaan, obrolan, atau kamu menolak karena tak ada bahannya di catatan), JANGAN tulis token itu sama sekali. Token ini akan disembunyikan dari pengguna.
+      ${ragContext
+        ? `\nInformasi referensi tepercaya (gunakan ini sebagai sumber utama untuk pertanyaan informasi):\n${ragContext}\n`
+        : `\n(Catatan internal: tidak ada referensi yang cocok untuk pesan ini. Jika pengguna menanyakan informasi/fakta/teknik, akui dengan hangat bahwa kamu belum punya bahannya dan JANGAN mengarang. Jika ini curhat atau sapaan, temani saja dengan empati.)\n`}
     `;
 
     // Map history to Claude message structure
@@ -255,6 +271,12 @@ Deno.serve(async (req) => {
       replyText = 'Hai! Aku sedang menyelaraskan pikiranku sebentar. Boleh kamu sapa aku lagi nanti? 💙';
     }
 
+    // "grounded" = the model self-reported that it actually used the knowledge
+    // base (via the hidden [[GROUNDED]] tag). Detect it, then strip it so the
+    // user never sees the token.
+    const grounded = /\[\[\s*GROUNDED\s*\]\]/i.test(replyText);
+    replyText = replyText.replace(/\[\[\s*GROUNDED\s*\]\]/gi, '').trim();
+
     // Save assistant reply to database
     await supabase.from('chat_messages').insert({
       user_id: user.id,
@@ -264,7 +286,9 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       flagged_crisis: false,
-      reply: replyText
+      reply: replyText,
+      grounded,           // true = jawaban benar-benar memakai knowledge base
+      sources: matchedCount
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

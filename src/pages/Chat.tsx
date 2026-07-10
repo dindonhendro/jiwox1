@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import JiwoMascot from '@/components/JiwoMascot';
 import CrisisModal from '@/components/CrisisModal';
-import { Send, AlertOctagon, RefreshCw } from 'lucide-react';
+import { Send, AlertOctagon, RefreshCw, BookOpen } from 'lucide-react';
 
 export default function Chat() {
   const navigate = useNavigate();
@@ -214,6 +214,7 @@ export default function Chat() {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: replyText,
+          grounded: !!data.grounded,
           created_at: new Date().toISOString()
         }
       ]);
@@ -283,7 +284,7 @@ export default function Chat() {
           messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
             >
               <div
                 className={`max-w-[80%] p-3.5 rounded-2xl text-sm leading-relaxed ${
@@ -294,6 +295,12 @@ export default function Chat() {
               >
                 {msg.content}
               </div>
+              {/* Subtle "grounded" badge: this reply drew from Jiwo's knowledge base */}
+              {msg.role === 'assistant' && msg.grounded && (
+                <span className="mt-1 ml-1 inline-flex items-center gap-1 text-4xs font-bold text-jiwo-sage bg-jiwo-sageLight/60 border border-jiwo-sage/25 px-2 py-0.5 rounded-full">
+                  <BookOpen className="w-2.5 h-2.5" /> dari catatan Jiwo
+                </span>
+              )}
             </div>
           ))
         )}
