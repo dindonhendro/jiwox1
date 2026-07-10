@@ -10,7 +10,7 @@ const MASCOT_SRCS: Record<MascotState, string> = {
   idle: '/jiwo/idle.png',
   happy: '/jiwo/happy.png',
   calm: '/jiwo/calm.png',
-  stress: '/jiwo/idle.png',
+  stress: '/jiwo/stress.png',
   sad: '/jiwo/sad.png',
   sleep: '/jiwo/sleep.png',
 };
