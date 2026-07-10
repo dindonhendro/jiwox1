@@ -16,6 +16,29 @@ const MOOD_ACCENT: Record<string, string> = {
   lelah: '#9382CD',
 };
 
+const ACTIVE_MOOD_CLASSES: Record<string, string> = {
+  tenang: 'bg-[#8FBC8F]/25 text-[#3b5c3b] border-[#8FBC8F]/60 shadow-xs scale-[1.03]',
+  senang: 'bg-[#E9BE4B]/25 text-[#8f6d0f] border-[#E9BE4B]/60 shadow-xs scale-[1.03]',
+  cemas: 'bg-[#E88E8D]/25 text-[#913b39] border-[#E88E8D]/60 shadow-xs scale-[1.03]',
+  sedih: 'bg-[#6B90B3]/25 text-[#2b4c6e] border-[#6B90B3]/60 shadow-xs scale-[1.03]',
+  lelah: 'bg-[#9382CD]/25 text-[#4a3a8a] border-[#9382CD]/60 shadow-xs scale-[1.03]',
+};
+
+const TEMPLATE_CLASSES: Record<string, { active: string; inactive: string }> = {
+  mood_story: {
+    active: 'border-[#E88E8D] bg-gradient-to-b from-[#E88E8D]/20 to-white text-[#913b39] shadow-sm scale-[1.03]',
+    inactive: 'border-[#E88E8D]/25 hover:bg-[#E88E8D]/5 text-jiwo-textMuted hover:-translate-y-0.5'
+  },
+  gratitude: {
+    active: 'border-[#E9BE4B] bg-gradient-to-b from-[#E9BE4B]/20 to-white text-[#8f6d0f] shadow-sm scale-[1.03]',
+    inactive: 'border-[#E9BE4B]/25 hover:bg-[#E9BE4B]/5 text-jiwo-textMuted hover:-translate-y-0.5'
+  },
+  future_self: {
+    active: 'border-[#8FBC8F] bg-gradient-to-b from-[#8FBC8F]/20 to-white text-[#3b5c3b] shadow-sm scale-[1.03]',
+    inactive: 'border-[#8FBC8F]/25 hover:bg-[#8FBC8F]/5 text-jiwo-textMuted hover:-translate-y-0.5'
+  }
+};
+
 // Gentle writing sparks that rotate under the textarea label
 const WRITING_PROMPTS = [
   'Apa satu hal kecil yang membuatmu tersenyum hari ini?',
@@ -284,8 +307,8 @@ export default function Journal() {
                   onClick={() => setJournalType(t.type as JournalType)}
                   className={`py-2.5 rounded-xl text-center text-xs font-semibold border transition-all duration-300 flex flex-col items-center gap-1 ${
                     journalType === t.type
-                      ? 'border-jiwo-primary bg-gradient-to-b from-jiwo-primaryLight/50 to-white text-jiwo-primary shadow-sm scale-[1.03]'
-                      : 'border-jiwo-primaryLight/25 hover:bg-jiwo-bg text-jiwo-textMuted hover:-translate-y-0.5'
+                      ? TEMPLATE_CLASSES[t.type].active
+                      : TEMPLATE_CLASSES[t.type].inactive
                   }`}
                 >
                   {t.icon}
@@ -312,10 +335,10 @@ export default function Journal() {
                     key={m.tag}
                     type="button"
                     onClick={() => setMoodTag(m.tag)}
-                    className={`flex-grow py-2 rounded-xl text-xs font-bold text-center transition flex flex-col items-center gap-1 ${
+                    className={`flex-grow py-2.5 rounded-xl text-xs font-bold text-center transition-all duration-300 border border-transparent flex flex-col items-center gap-1 ${
                       moodTag === m.tag
-                        ? 'bg-white text-jiwo-textDark shadow-sm border border-jiwo-primaryLight/40'
-                        : 'text-jiwo-textMuted hover:text-jiwo-textDark'
+                        ? ACTIVE_MOOD_CLASSES[m.tag]
+                        : 'text-jiwo-textMuted hover:text-jiwo-textDark hover:bg-jiwo-bg/40'
                     }`}
                   >
                     <MoodIcon mood={m.tag} size={18} />
@@ -444,12 +467,15 @@ export default function Journal() {
                 return (
                   <div
                     key={item.id}
-                    className="relative bg-white rounded-3xl p-5 pl-6 border border-jiwo-primaryLight/20 shadow-2xs space-y-3 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+                    className="relative bg-white rounded-3xl p-5 pl-7 border border-jiwo-primaryLight/20 shadow-2xs space-y-3 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+                    style={{
+                      background: `linear-gradient(to right, ${accent}12, ${accent}04 120px, white 200px)`
+                    }}
                   >
                     {/* Hand-painted mood edge */}
                     <span
-                      className="absolute left-0 top-0 bottom-0 w-1.5"
-                      style={{ background: `linear-gradient(180deg, ${accent}, ${accent}55)` }}
+                      className="absolute left-0 top-0 bottom-0 w-2.5"
+                      style={{ background: `linear-gradient(180deg, ${accent}, ${accent}99)` }}
                       aria-hidden="true"
                     />
                     {/* Big decorative quote mark */}
@@ -463,7 +489,10 @@ export default function Journal() {
 
                     <div className="flex justify-between items-start relative">
                       <div className="space-y-0.5">
-                        <span className="text-2xs font-bold text-jiwo-primary bg-jiwo-primaryLight/30 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                        <span 
+                          className="text-3xs font-extrabold px-2.5 py-0.75 rounded-full uppercase tracking-wider text-white"
+                          style={{ backgroundColor: accent }}
+                        >
                           {item.type === 'mood_story' && 'Mood Story'}
                           {item.type === 'gratitude' && 'Gratitude Log'}
                           {item.type === 'future_self' && 'Future Letter'}
