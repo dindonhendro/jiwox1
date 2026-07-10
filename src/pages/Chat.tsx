@@ -13,17 +13,52 @@ export default function Chat() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [mascotState, setMascotState] = useState<'idle' | 'happy' | 'calm' | 'stress' | 'sad' | 'sleep'>('idle');
   const [showCrisisModal, setShowCrisisModal] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Conversation is cached on-device so it survives page navigation even
+  // when the database save is failing (the chat_messages table currently
+  // rejects inserts due to a broken foreign key on the server).
+  const cacheKey = (uid: string) => `jiwo_chat_${uid}`;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         navigate('/login');
-      } else {
-        fetchChatHistory();
+        return;
       }
+      const uid = session.user.id;
+      setUserId(uid);
+
+      // 1. Restore the cached conversation instantly
+      let hadCache = false;
+      try {
+        const cached = localStorage.getItem(cacheKey(uid));
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+            hadCache = true;
+            setHistoryLoading(false);
+          }
+        }
+      } catch { /* ignore corrupt cache */ }
+
+      // 2. Fetch DB history (authoritative only if it actually has content)
+      fetchChatHistory(hadCache);
     });
   }, [navigate]);
+
+  // Persist the conversation whenever it changes (skip the bare greeting)
+  useEffect(() => {
+    if (!userId) return;
+    const hasRealMessages = messages.some((m) => m.id !== 'init');
+    if (!hasRealMessages) return;
+    try {
+      // keep the last 100 messages to bound storage
+      localStorage.setItem(cacheKey(userId), JSON.stringify(messages.slice(-100)));
+    } catch { /* storage full / unavailable */ }
+  }, [messages, userId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -33,7 +68,7 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const fetchChatHistory = async () => {
+  const fetchChatHistory = async (hadCache = false) => {
     try {
       const { data, error } = await supabase
         .from('chat_messages')
@@ -44,9 +79,15 @@ export default function Chat() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        setMessages(data);
-      } else {
-        // Fallback to default greeting if empty
+        // DB has saved history → it's authoritative
+        const mapped = data.map((m: any) => ({
+          ...m,
+          role: m.role || (m.sender === 'user' ? 'user' : 'assistant')
+        }));
+        setMessages(mapped);
+      } else if (!hadCache) {
+        // No DB history AND no cached conversation → show the greeting.
+        // (If we had a cache, we keep it so the conversation isn't wiped.)
         setMessages([
           {
             id: 'init',
@@ -127,65 +168,16 @@ export default function Chat() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-      // Crisis keywords detection list (Indonesian)
-      const CRISIS_KEYWORDS = [
-        'bunuh diri',
-        'akhiri hidup',
-        'akhiri hidupku',
-        'ingin mati',
-        'pengen mati',
-        'pengin mati',
-        'mau mati',
-        'menyakiti diri',
-        'sayat tangan',
-        'potong nadi',
-        'gantung diri',
-        'minum racun',
-        'lompat dari gedung',
-        'nyilet',
-        'suicide',
-        'self harm',
-        'menabrakkan diri'
-      ];
-      const checkCrisis = (text: string): boolean => {
-        const cleanText = text.toLowerCase();
-        return CRISIS_KEYWORDS.some(keyword => cleanText.includes(keyword));
-      };
-
-      // 1. CRISIS DETECTION (SAFETY LAYER)
-      if (checkCrisis(userText)) {
-        const crisisReply = 'Maafkan aku ya, tapi sepertinya kamu sedang melewati masa yang sangat berat saat ini. Aku sangat peduli padamu, tapi aku hanyalah AI pendamping. Tolong hubungi layanan darurat SEJIWA dengan menekan tombol darurat merah atau kontak profesional kesehatan jiwa Indonesia sekarang juga. Kamu tidak sendirian.';
-        
-        // Save flagged message to db
-        await supabase.from('chat_messages').insert([
-          { user_id: session?.user?.id, role: 'user', content: userText, flagged_crisis: true },
-          { user_id: session?.user?.id, role: 'assistant', content: crisisReply, flagged_crisis: true }
-        ]);
-
-        setShowCrisisModal(true);
-        setMascotState('sad');
-        await fetchChatHistory();
-        return;
-      }
-
-      // Save user message to database
-      await supabase.from('chat_messages').insert({
-        user_id: session?.user?.id,
-        role: 'user',
-        content: userText,
-        flagged_crisis: false
-      });
-
-      // Call n8n webhook
-      const response = await fetch('https://dindon.app.n8n.cloud/webhook/mindfullnessx1', {
+      const response = await fetch(`${supabaseUrl}/functions/v1/chat`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({
           message: userText,
-          userId: session?.user?.id,
           history: messages.filter(m => m.id !== 'init').map(m => ({
             role: m.role,
             content: m.content
@@ -194,40 +186,37 @@ export default function Chat() {
       });
 
       if (!response.ok) {
+        let detail = '';
+        try {
+          detail = (await response.json()).error || '';
+        } catch { /* body was not JSON */ }
+        console.error(`Chat server error ${response.status}:`, detail);
         throw new Error('server');
       }
 
-      let replyText = '';
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const first = data[0];
-          replyText = first.output || first.reply || first.response || first.text || first.message || '';
-        } else {
-          replyText = data.output || data.reply || data.response || data.text || data.message || '';
-        }
+      const data = await response.json();
+      const replyText = data.reply || 'Hai, aku di sini menemanimu ya. 💙';
+
+      if (data.flagged_crisis) {
+        setShowCrisisModal(true);
+        setMascotState('sad');
       } else {
-        replyText = await response.text();
+        // Analyze mascot expression based on Jiwo's response
+        analyzeMascotExpression(replyText);
       }
 
-      if (!replyText || !replyText.trim()) {
-        throw new Error('server');
-      }
-
-      // Save assistant reply to database
-      await supabase.from('chat_messages').insert({
-        user_id: session?.user?.id,
-        role: 'assistant',
-        content: replyText,
-        flagged_crisis: false
-      });
-
-      // Analyze mascot expression based on Jiwo's response
-      analyzeMascotExpression(replyText);
-
-      // Re-fetch chat logs to sync state with database id values
-      await fetchChatHistory();
+      // Show Jiwo's reply directly from the response so it ALWAYS appears —
+      // never depend on a database re-fetch (which silently returns empty if
+      // the server-side save fails, making the reply vanish).
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: replyText,
+          created_at: new Date().toISOString()
+        }
+      ]);
 
     } catch (err: any) {
       console.error('Chat error:', err);

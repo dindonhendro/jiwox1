@@ -78,12 +78,11 @@ Deno.serve(async (req) => {
     if (checkCrisis(message)) {
       // Save flagged message to db
       await supabase.from('chat_messages').insert([
-        { user_id: user.id, role: 'user', content: message, flagged_crisis: true },
+        { user_id: user.id, sender: 'user', content: message },
         { 
           user_id: user.id, 
-          role: 'assistant', 
-          content: 'Maafkan aku ya, tapi sepertinya kamu sedang melewati masa yang sangat berat saat ini. Aku sangat peduli padamu, tapi aku hanyalah AI pendamping. Tolong hubungi layanan darurat SEJIWA dengan menekan tombol darurat merah atau kontak profesional kesehatan jiwa Indonesia sekarang juga. Kamu tidak sendirian.', 
-          flagged_crisis: true 
+          sender: 'ai', 
+          content: 'Maafkan aku ya, tapi sepertinya kamu sedang melewati masa yang sangat berat saat ini. Aku sangat peduli padamu, tapi aku hanyalah AI pendamping. Tolong hubungi layanan darurat SEJIWA dengan menekan tombol darurat merah atau kontak profesional kesehatan jiwa Indonesia sekarang juga. Kamu tidak sendirian.'
         }
       ]);
 
@@ -99,9 +98,8 @@ Deno.serve(async (req) => {
     // Save user message to database
     await supabase.from('chat_messages').insert({
       user_id: user.id,
-      role: 'user',
-      content: message,
-      flagged_crisis: false
+      sender: 'user',
+      content: message
     });
 
     // Fetch user profile info to personalize response
@@ -170,104 +168,98 @@ Deno.serve(async (req) => {
       { role: 'user', content: message }
     ];
 
-    const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    let replyText: string;
-
-    if (anthropicApiKey) {
-      // --- Provider 1: Anthropic Claude (production) ---
-      // claude-3-5-sonnet-20241022 was retired (Oct 2025) and returns 404;
-      // claude-sonnet-4-6 is its official drop-in replacement.
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': anthropicApiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages: formattedMessages
-        })
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('Claude API call failed:', errText);
-        throw new Error(`Anthropic Claude API returned error: ${response.status}`);
-      }
-
-      const resJson = await response.json();
-      replyText = resJson.content[0].text;
-
-    } else if (geminiApiKey) {
-      // --- Provider 2: Google Gemini (free tier) ---
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: formattedMessages.map((m: any) => ({
-              role: m.role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: m.content }]
-            })),
-            generationConfig: { maxOutputTokens: 1024 }
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('Gemini API call failed:', errText);
-        throw new Error(`Gemini API returned error: ${response.status}`);
-      }
-
-      const resJson = await response.json();
-      replyText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!replyText) throw new Error('Gemini returned an empty response');
-
-    } else {
-      // --- Provider 3: Pollinations.ai (free, no API key — testing fallback) ---
-      const response = await fetch('https://text.pollinations.ai/openai', {
+    // Free keyless LLM used as the universal fallback (no API key needed).
+    const askPollinations = async (): Promise<string> => {
+      const res = await fetch('https://text.pollinations.ai/openai', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'openai',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...formattedMessages
-          ]
+          messages: [{ role: 'system', content: systemPrompt }, ...formattedMessages]
         })
       });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('Pollinations API call failed:', errText);
-        throw new Error(`Pollinations API returned error: ${response.status}`);
-      }
-
-      // Endpoint mirrors the OpenAI chat-completions shape, but be tolerant
-      // of a plain-text body as well.
-      const raw = await response.text();
+      if (!res.ok) throw new Error(`Pollinations ${res.status}: ${await res.text()}`);
+      const raw = await res.text();
       try {
-        const resJson = JSON.parse(raw);
-        replyText = resJson.choices?.[0]?.message?.content ?? raw;
+        const j = JSON.parse(raw);
+        return (j.choices?.[0]?.message?.content ?? raw).trim();
       } catch {
-        replyText = raw;
+        return raw.trim();
       }
-      if (!replyText || !replyText.trim()) throw new Error('Pollinations returned an empty response');
+    };
+
+    let replyText = '';
+    const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+
+    try {
+      if (anthropicApiKey) {
+        // --- Provider 1: Anthropic Claude (production) ---
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': anthropicApiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1024,
+            system: systemPrompt,
+            messages: formattedMessages
+          })
+        });
+        if (!res.ok) throw new Error(`Claude ${res.status}: ${await res.text()}`);
+        const j = await res.json();
+        replyText = (j.content?.[0]?.text ?? '').trim();
+
+      } else if (geminiApiKey) {
+        // --- Provider 2: Google Gemini (free tier) ---
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: formattedMessages.map((m: any) => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.content }]
+              })),
+              generationConfig: { maxOutputTokens: 1024 }
+            })
+          }
+        );
+        if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+        const j = await res.json();
+        replyText = (j.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
+
+      } else {
+        // --- Provider 3: Pollinations.ai (free, no API key — testing) ---
+        replyText = await askPollinations();
+      }
+    } catch (llmErr) {
+      console.error('LLM provider failed:', llmErr);
+      // Primary keyed provider errored → fall back to the free keyless LLM so
+      // chat never goes fully dark.
+      if (anthropicApiKey || geminiApiKey) {
+        try {
+          replyText = await askPollinations();
+        } catch (fbErr) {
+          console.error('Keyless fallback failed:', fbErr);
+        }
+      }
+    }
+
+    if (!replyText) {
+      replyText = 'Hai! Aku sedang menyelaraskan pikiranku sebentar. Boleh kamu sapa aku lagi nanti? 💙';
     }
 
     // Save assistant reply to database
     await supabase.from('chat_messages').insert({
       user_id: user.id,
-      role: 'assistant',
-      content: replyText,
-      flagged_crisis: false
+      sender: 'ai',
+      content: replyText
     });
 
     return new Response(JSON.stringify({

@@ -186,16 +186,20 @@ export default function Layout() {
           </PageTransition>
         </main>
 
-        {/* Floating Action Button (FAB) for Rescue */}
-        <div ref={fabRef} className="absolute bottom-24 right-5 z-40">
-          <Link
-            to="/rescue"
-            title="Sesi Rescue (Tenangkan Diri)"
-            className="flex items-center justify-center w-14 h-14 bg-gradient-to-r from-jiwo-primary to-jiwo-blueCalm hover:from-jiwo-primary/95 hover:to-jiwo-blueCalm/95 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-          >
-            <Heart className="w-7 h-7 fill-white animate-pulse" />
-          </Link>
-        </div>
+        {/* Floating Action Button (FAB) for Rescue.
+            Hidden on /chat — there the FAB sits exactly on top of the message
+            "Kirim" button and would hijack every send tap into a page change. */}
+        {!isActive('/chat') && (
+          <div ref={fabRef} className="absolute bottom-24 right-5 z-40">
+            <Link
+              to="/rescue"
+              title="Sesi Rescue (Tenangkan Diri)"
+              className="flex items-center justify-center w-14 h-14 bg-gradient-to-r from-jiwo-primary to-jiwo-blueCalm hover:from-jiwo-primary/95 hover:to-jiwo-blueCalm/95 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+            >
+              <Heart className="w-7 h-7 fill-white animate-pulse" />
+            </Link>
+          </div>
+        )}
 
         {/* Bottom Navigation */}
         <nav className="fixed bottom-0 w-full max-w-md bg-white/90 backdrop-blur border-t border-jiwo-primaryLight/25 py-2 px-2 flex justify-around items-center z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]">
