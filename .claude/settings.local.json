@@ -23,7 +23,8 @@
       "PowerShell($pkg = Get-Content \"node_modules\\\\pdf-parse\\\\package.json\" -Raw | ConvertFrom-Json; Write-Output \"version: $\\($pkg.version\\)\"; Write-Output \"main: $\\($pkg.main\\)\"; Write-Output \"--- exports ---\"; $pkg.exports | ConvertTo-Json -Depth 4; Write-Output \"--- files in package ---\"; Get-ChildItem \"node_modules\\\\pdf-parse\" -File | Select-Object Name; Get-ChildItem \"node_modules\\\\pdf-parse\\\\dist\" -ErrorAction SilentlyContinue | Select-Object Name)",
       "PowerShell(npm install pdf-parse@1.1.1 --save-dev 2>&1 | Select-Object -Last 3; Write-Output \"---\"; \\(Get-Content \"node_modules\\\\pdf-parse\\\\package.json\" -Raw | ConvertFrom-Json\\).version; Test-Path \"node_modules\\\\pdf-parse\\\\lib\\\\pdf-parse.js\")",
       "PowerShell(node ingest-knowledge.js --fresh)",
-      "PowerShell(node ingest-knowledge.js)"
+      "PowerShell(node ingest-knowledge.js)",
+      "PowerShell(npx -y supabase secrets set GEMINI_API_KEY=AIzaSyATpq7hIT1GkGJ74af99HeWWxHg9FHE9C0 --project-ref ahnchamqeyiqhfeezlxq)"
     ]
   }
 }

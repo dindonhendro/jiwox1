@@ -231,24 +231,34 @@ Deno.serve(async (req) => {
 
       } else if (geminiApiKey) {
         // --- Provider 2: Google Gemini (free tier) ---
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-          {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: formattedMessages.map((m: any) => ({
-                role: m.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: m.content }]
-              })),
-              generationConfig: { maxOutputTokens: 1024 }
-            })
-          }
-        );
-        if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-        const j = await res.json();
-        replyText = (j.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
+        // Try current models in order; skip any that were retired (404) so the
+        // chat survives Google deprecating a model name.
+        const geminiModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash-001'];
+        const geminiBody = JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: formattedMessages.map((m: any) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }]
+          })),
+          // thinkingBudget 0 disables "thinking" on 2.5 models so the reply is
+          // the actual answer, not the model's internal reasoning.
+          generationConfig: { maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } }
+        });
+        let geminiDone = false;
+        let lastErr = '';
+        for (const model of geminiModels) {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+            { method: 'POST', headers: { 'content-type': 'application/json' }, body: geminiBody }
+          );
+          if (res.status === 404) { lastErr = `${model} 404`; continue; } // retired → next
+          if (!res.ok) throw new Error(`Gemini ${model} ${res.status}: ${await res.text()}`);
+          const j = await res.json();
+          replyText = (j.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
+          geminiDone = true;
+          break;
+        }
+        if (!geminiDone) throw new Error(`Semua model Gemini tidak tersedia (${lastErr})`);
 
       } else {
         // --- Provider 3: Pollinations.ai (free, no API key — testing) ---
