@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "ingest": "node ingest-knowledge.js"
+    "ingest": "node ingest-knowledge.js",
+    "ocr": "node ocr-pdf.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

@@ -24,7 +24,12 @@
       "PowerShell(npm install pdf-parse@1.1.1 --save-dev 2>&1 | Select-Object -Last 3; Write-Output \"---\"; \\(Get-Content \"node_modules\\\\pdf-parse\\\\package.json\" -Raw | ConvertFrom-Json\\).version; Test-Path \"node_modules\\\\pdf-parse\\\\lib\\\\pdf-parse.js\")",
       "PowerShell(node ingest-knowledge.js --fresh)",
       "PowerShell(node ingest-knowledge.js)",
-      "PowerShell(npx -y supabase secrets set GEMINI_API_KEY=AIzaSyATpq7hIT1GkGJ74af99HeWWxHg9FHE9C0 --project-ref ahnchamqeyiqhfeezlxq)"
+      "PowerShell(npx -y supabase secrets set GEMINI_API_KEY=AIzaSyATpq7hIT1GkGJ74af99HeWWxHg9FHE9C0 --project-ref ahnchamqeyiqhfeezlxq)",
+      "Bash(node -e ' *)",
+      "Bash(tesseract --version)",
+      "Bash(pdftoppm -v)",
+      "Bash(python -c \"import ocrmypdf; print\\('ocrmypdf ok'\\)\")",
+      "Bash(node ocr-pdf.js \"knowledge/jiwo knowledge1 full.pdf\")"
     ]
   }
 }

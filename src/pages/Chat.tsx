@@ -1,9 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
-import JiwoMascot from '@/components/JiwoMascot';
 import CrisisModal from '@/components/CrisisModal';
 import { Send, AlertOctagon, RefreshCw, BookOpen } from 'lucide-react';
+
+// Small mood-reactive avatar images for the chat header
+const HEADER_AVATAR: Record<string, string> = {
+  idle: '/jiwo/idle.png',
+  happy: '/jiwo/happy.png',
+  calm: '/jiwo/calm.png',
+  stress: '/jiwo/stress.png',
+  sad: '/jiwo/sad.png',
+  sleep: '/jiwo/sleep.png',
+};
 
 export default function Chat() {
   const navigate = useNavigate();
@@ -247,8 +256,16 @@ export default function Chat() {
       {/* Mascot Header Anchor */}
       <div className="flex items-center gap-3 bg-jiwo-blueLight/30 p-3 rounded-2xl border border-jiwo-primaryLight/20 mb-3.5 shadow-2xs shrink-0 justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-12 h-12 scale-90 origin-bottom transform translate-y-1">
-            <JiwoMascot state={mascotState} scale={1} showAnimation={true} />
+          {/* Small mood-reactive avatar — a plain contained image so it can
+              never overflow the header (the full JiwoMascot is 180px and was
+              spilling its green fallback over the chat). */}
+          <div className="w-12 h-12 rounded-full overflow-hidden bg-jiwo-primaryLight/40 border border-jiwo-primary/20 flex items-center justify-center shrink-0">
+            <img
+              src={HEADER_AVATAR[mascotState] || HEADER_AVATAR.idle}
+              alt="Jiwo"
+              draggable={false}
+              className="w-full h-full object-contain animate-float-slow"
+            />
           </div>
           <div>
             <h3 className="font-bold text-sm text-jiwo-textDark">Jiwo Companion</h3>
