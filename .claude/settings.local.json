@@ -29,7 +29,11 @@
       "Bash(tesseract --version)",
       "Bash(pdftoppm -v)",
       "Bash(python -c \"import ocrmypdf; print\\('ocrmypdf ok'\\)\")",
-      "Bash(node ocr-pdf.js \"knowledge/jiwo knowledge1 full.pdf\")"
+      "Bash(node ocr-pdf.js \"knowledge/jiwo knowledge1 full.pdf\")",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "PowerShell(Get-ChildItem \"public\\\\jiwo\" | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB\\)}}, LastWriteTime | Sort-Object Name)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:5174/jiwo/sleep.png\" -Method HEAD -UseBasicParsing -TimeoutSec 15; Write-Output \"sleep.png HTTP: $\\($r.StatusCode\\) type=$\\($r.Headers['Content-Type']\\) len=$\\($r.Headers['Content-Length']\\)\" } catch { Write-Output \"sleep.png GAGAL: $\\([int]$_.Exception.Response.StatusCode\\)\" })"
     ]
   }
 }

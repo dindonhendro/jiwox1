@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { supabase } from '@/lib/supabaseClient';
 import MoodIcon, { type MoodKey } from '@/components/MoodIcon';
-import { ChevronLeft, Sparkles, CalendarHeart, Flame } from 'lucide-react';
+import LockedCard from '@/components/LockedCard';
+import PremiumSheet from '@/components/PremiumSheet';
+import { ChevronLeft, Sparkles, CalendarHeart, Flame, Lock } from 'lucide-react';
 
 type Period = 7 | 30 | 90;
 
@@ -57,10 +59,22 @@ export default function MoodStats() {
   const [period, setPeriod] = useState<Period>(7);
   const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
+  const [showPremium, setShowPremium] = useState(false);
   const barsRef = useRef<HTMLDivElement>(null);
+
+  // Periods beyond 7 days are Premium-only
+  const locked = !isPremium && period !== 7;
+
+  useEffect(() => {
+    supabase.from('profiles').select('is_premium').single().then(({ data }) => {
+      if (data) setIsPremium(!!data.is_premium);
+    });
+  }, []);
   const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (locked) { setLoading(false); return; }
     let active = true;
     (async () => {
       setLoading(true);
@@ -77,7 +91,7 @@ export default function MoodStats() {
       }
     })();
     return () => { active = false; };
-  }, [period]);
+  }, [period, locked]);
 
   const stats = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -173,16 +187,32 @@ export default function MoodStats() {
           <button
             key={p}
             onClick={() => setPeriod(p)}
-            className={`relative z-10 flex-1 py-2 rounded-xl font-bold text-xs transition-colors ${
+            className={`relative z-10 flex-1 py-2 rounded-xl font-bold text-xs transition-colors inline-flex items-center justify-center gap-1 ${
               period === p ? 'text-jiwo-primary' : 'text-jiwo-textMuted hover:text-jiwo-textDark'
             }`}
           >
             {p} Hari
+            {!isPremium && p !== 7 && <Lock className="w-3 h-3 opacity-70" />}
           </button>
         ))}
       </div>
 
-      {loading ? (
+      {locked ? (
+        <LockedCard
+          title={`Peta hati ${period} hari`}
+          subtitle="Lihat tren suasana hatimu lebih jauh dengan Premium. Statistik 7 hari selalu gratis."
+          onUpgrade={() => setShowPremium(true)}
+        >
+          <div className="p-6 space-y-4">
+            <div className="h-20 rounded-2xl bg-jiwo-primaryLight/30" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-16 rounded-2xl bg-jiwo-bg" />
+              <div className="h-16 rounded-2xl bg-jiwo-bg" />
+            </div>
+            <div className="h-24 rounded-2xl bg-jiwo-bg" />
+          </div>
+        </LockedCard>
+      ) : loading ? (
         <div className="flex flex-col items-center justify-center py-16 gap-2">
           <div className="w-8 h-8 border-4 border-jiwo-primary border-t-transparent rounded-full animate-spin" />
           <span className="text-xs text-jiwo-textMuted">Menghitung suasana hatimu...</span>
@@ -305,6 +335,8 @@ export default function MoodStats() {
           </p>
         </>
       )}
+
+      <PremiumSheet open={showPremium} onClose={() => setShowPremium(false)} />
     </div>
   );
 }

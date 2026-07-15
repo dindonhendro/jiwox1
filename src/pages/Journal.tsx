@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { supabase } from '@/lib/supabaseClient';
 import MoodIcon, { type MoodKey } from '@/components/MoodIcon';
+import PremiumSheet from '@/components/PremiumSheet';
+import { FREE_JOURNAL_LIMIT } from '@/lib/limits';
 import { Calendar, PlusCircle, CheckCircle, RefreshCw, Feather, Sparkles, Send } from 'lucide-react';
 
 type JournalType = 'mood_story' | 'gratitude' | 'future_self';
@@ -65,6 +67,11 @@ export default function Journal() {
   // History states
   const [history, setHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Freemium
+  const [isPremium, setIsPremium] = useState(false);
+  const [journalToday, setJournalToday] = useState(0);
+  const [showPremium, setShowPremium] = useState(false);
 
   // Art & animation refs
   const formAreaRef = useRef<HTMLFormElement>(null);
@@ -137,7 +144,16 @@ export default function Journal() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         navigate('/login');
+        return;
       }
+      // Load premium status + today's journal usage for the free-tier limit
+      supabase.from('profiles').select('is_premium').single().then(({ data }) => {
+        if (data) setIsPremium(!!data.is_premium);
+      });
+      supabase.rpc('get_usage_today').then(({ data }) => {
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) setJournalToday(row.journal_count ?? 0);
+      });
     });
   }, [navigate]);
 
@@ -166,6 +182,13 @@ export default function Journal() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Free-tier daily journal cap
+    if (!isPremium && journalToday >= FREE_JOURNAL_LIMIT) {
+      setShowPremium(true);
+      return;
+    }
+
     setLoading(true);
     setSuccessMsg('');
 
@@ -200,6 +223,10 @@ export default function Journal() {
       setGratitude3('');
       setSuccessMsg('Jurnalmu berhasil disimpan dengan aman.');
       celebrateSave();
+
+      // Count against the daily quota (best-effort)
+      supabase.rpc('increment_usage', { p_kind: 'journal' }).then(() => {});
+      setJournalToday((c) => c + 1);
       
       // Auto redirect to history tab after 2 seconds
       setTimeout(() => {
@@ -426,6 +453,16 @@ export default function Journal() {
             >
               {loading ? 'Menyimpan...' : 'Simpan Jurnal'}
             </button>
+
+            {/* Free-tier daily quota hint */}
+            {!isPremium && (
+              <p className="text-3xs text-center text-jiwo-textMuted">
+                {Math.max(0, FREE_JOURNAL_LIMIT - journalToday)} dari {FREE_JOURNAL_LIMIT} entri gratis tersisa hari ini ·{' '}
+                <button type="button" onClick={() => setShowPremium(true)} className="text-jiwo-primary font-bold hover:underline">
+                  Premium tanpa batas
+                </button>
+              </p>
+            )}
           </form>
 
         </div>
@@ -535,6 +572,7 @@ export default function Journal() {
         </div>
       )}
 
+      <PremiumSheet open={showPremium} onClose={() => setShowPremium(false)} />
     </div>
   );
 }

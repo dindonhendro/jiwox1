@@ -66,6 +66,10 @@ html, body, #root {
   from { left: -25%; }
   to { left: 110%; }
 }
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .scene-anim, .scene-anim * { animation: none !important; }

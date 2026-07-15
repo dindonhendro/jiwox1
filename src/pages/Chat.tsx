@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import CrisisModal from '@/components/CrisisModal';
+import QuotaBubble from '@/components/QuotaBubble';
+import PremiumSheet from '@/components/PremiumSheet';
 import { Send, AlertOctagon, RefreshCw, BookOpen } from 'lucide-react';
 
 // Small mood-reactive avatar images for the chat header
@@ -22,6 +24,7 @@ export default function Chat() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [mascotState, setMascotState] = useState<'idle' | 'happy' | 'calm' | 'stress' | 'sad' | 'sleep'>('idle');
   const [showCrisisModal, setShowCrisisModal] = useState(false);
+  const [showPremium, setShowPremium] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -204,6 +207,23 @@ export default function Chat() {
       }
 
       const data = await response.json();
+
+      // Daily free-tier quota reached — show the soft upgrade bubble instead.
+      if (data.quota_exceeded) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `quota-${Date.now()}`,
+            role: 'assistant',
+            content: data.reply,
+            quotaExceeded: true,
+            created_at: new Date().toISOString()
+          }
+        ]);
+        setMascotState('calm');
+        return;
+      }
+
       const replyText = data.reply || 'Hai, aku di sini menemanimu ya. 💙';
 
       if (data.flagged_crisis) {
@@ -298,28 +318,32 @@ export default function Chat() {
             <span className="text-xs text-jiwo-textMuted font-semibold">Mengingat percakapan...</span>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-            >
+          messages.map((msg) =>
+            msg.quotaExceeded ? (
+              <QuotaBubble key={msg.id} message={msg.content} onUpgrade={() => setShowPremium(true)} />
+            ) : (
               <div
-                className={`max-w-[80%] p-3.5 rounded-2xl text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-gradient-to-tr from-jiwo-primary to-jiwo-blueCalm text-white rounded-br-none shadow-2xs font-medium'
-                    : 'bg-jiwo-blueLight/50 text-jiwo-textDark rounded-bl-none border border-jiwo-primaryLight/15'
-                }`}
+                key={msg.id}
+                className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
               >
-                {msg.content}
+                <div
+                  className={`max-w-[80%] p-3.5 rounded-2xl text-sm leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-gradient-to-tr from-jiwo-primary to-jiwo-blueCalm text-white rounded-br-none shadow-2xs font-medium'
+                      : 'bg-jiwo-blueLight/50 text-jiwo-textDark rounded-bl-none border border-jiwo-primaryLight/15'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+                {/* Subtle "grounded" badge: this reply drew from Jiwo's knowledge base */}
+                {msg.role === 'assistant' && msg.grounded && (
+                  <span className="mt-1 ml-1 inline-flex items-center gap-1 text-4xs font-bold text-jiwo-sage bg-jiwo-sageLight/60 border border-jiwo-sage/25 px-2 py-0.5 rounded-full">
+                    <BookOpen className="w-2.5 h-2.5" /> dari catatan Jiwo
+                  </span>
+                )}
               </div>
-              {/* Subtle "grounded" badge: this reply drew from Jiwo's knowledge base */}
-              {msg.role === 'assistant' && msg.grounded && (
-                <span className="mt-1 ml-1 inline-flex items-center gap-1 text-4xs font-bold text-jiwo-sage bg-jiwo-sageLight/60 border border-jiwo-sage/25 px-2 py-0.5 rounded-full">
-                  <BookOpen className="w-2.5 h-2.5" /> dari catatan Jiwo
-                </span>
-              )}
-            </div>
-          ))
+            )
+          )
         )}
 
         {loading && (
@@ -351,6 +375,8 @@ export default function Chat() {
 
       {/* Crisis helpline list modal */}
       <CrisisModal isOpen={showCrisisModal} onClose={() => setShowCrisisModal(false)} />
+
+      <PremiumSheet open={showPremium} onClose={() => setShowPremium(false)} />
     </div>
   );
 }

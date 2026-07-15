@@ -148,6 +148,10 @@ export default function JiwoMascot({
   showAnimation = true,
 }: JiwoMascotProps) {
   const [imgError, setImgError] = useState(false);
+  // Cache-busting retry counter: a transient load failure (e.g. dev-server
+  // restart) shouldn't stick the SVG fallback forever — retry a couple of
+  // times with a fresh URL before giving up.
+  const [retry, setRetry] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const particleLayerRef = useRef<HTMLDivElement>(null);
@@ -157,6 +161,7 @@ export default function JiwoMascot({
 
   // Each state has its own image now — retry on state change
   useEffect(() => {
+    setRetry(0);
     setImgError(false);
   }, [state]);
 
@@ -310,12 +315,20 @@ export default function JiwoMascot({
       >
         {!imgError ? (
           <img
-            src={MASCOT_SRCS[state] || MASCOT_SRCS.idle}
+            src={`${MASCOT_SRCS[state] || MASCOT_SRCS.idle}${retry > 0 ? `?r=${retry}` : ''}`}
             alt={`Jiwo - ${state}`}
             draggable={false}
             className="absolute inset-0 w-full h-full object-contain pointer-events-none z-10 transition-[filter] duration-1000"
             style={{ filter: fx.filter }}
-            onError={() => setImgError(true)}
+            onError={() => {
+              // Retry twice with a cache-busting URL (spaced out) before
+              // surrendering to the SVG fallback.
+              if (retry < 2) {
+                setTimeout(() => setRetry((r) => r + 1), 1200 * (retry + 1));
+              } else {
+                setImgError(true);
+              }
+            }}
           />
         ) : (
           <div

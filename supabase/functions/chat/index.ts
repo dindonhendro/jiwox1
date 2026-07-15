@@ -95,21 +95,39 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch user profile (name + premium status)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('nama, baseline_assessment, is_premium')
+      .eq('id', user.id)
+      .single();
+
+    const userName = profile?.nama || 'Sahabat';
+
+    // FREEMIUM QUOTA — free tier is capped at FREE_CHAT_LIMIT messages/day.
+    // Crisis messages are handled above and never reach here (safety is never gated).
+    const FREE_CHAT_LIMIT = 10;
+    if (!profile?.is_premium) {
+      const { data: usage } = await supabase.rpc('get_usage_today');
+      const used = Array.isArray(usage) ? (usage[0]?.chat_count ?? 0) : (usage?.chat_count ?? 0);
+      if (used >= FREE_CHAT_LIMIT) {
+        return new Response(JSON.stringify({
+          quota_exceeded: true,
+          flagged_crisis: false,
+          reply: `Kuota ngobrol harianmu sudah habis ya, ${userName}. Aku senang banget kamu mau cerita 💙 Yuk lanjut lagi besok — atau buka Premium biar kita bisa ngobrol tanpa batas kapan pun kamu butuh.`
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // Save user message to database
     await supabase.from('chat_messages').insert({
       user_id: user.id,
       sender: 'user',
       content: message
     });
-
-    // Fetch user profile info to personalize response
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('nama, baseline_assessment')
-      .eq('id', user.id)
-      .single();
-
-    const userName = profile?.nama || 'Sahabat';
 
     // 2. RAG RETRIEVAL — find knowledge chunks relevant to the message
     let ragContext = '';
@@ -294,11 +312,20 @@ Deno.serve(async (req) => {
       content: replyText
     });
 
+    // Count this exchange against the daily quota (free tier). Best-effort.
+    let chatUsed = 0;
+    try {
+      const { data: incr } = await supabase.rpc('increment_usage', { p_kind: 'chat' });
+      chatUsed = typeof incr === 'number' ? incr : 0;
+    } catch (_e) { /* counter is non-critical */ }
+
     return new Response(JSON.stringify({
       flagged_crisis: false,
       reply: replyText,
       grounded,           // true = jawaban benar-benar memakai knowledge base
-      sources: matchedCount
+      sources: matchedCount,
+      chat_used: chatUsed,
+      chat_limit: profile?.is_premium ? null : 10
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
