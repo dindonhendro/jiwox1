@@ -25,14 +25,14 @@ export default function JiwoPeek() {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstPeek = useRef(true);
 
-  // Each time Jiwo hides, schedule the next peek: ~10s for the first,
-  // then a random 30–55s in between. (Lower these to make Jiwo peek MORE
+  // Each time Jiwo hides, schedule the next peek: ~4s for the first,
+  // then a random 14–28s in between. (Lower these to make Jiwo peek MORE
   // often, raise them to make it rarer.)
   useEffect(() => {
     if (visible) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const delay = firstPeek.current ? 10000 : gsap.utils.random(30000, 55000);
+    const delay = firstPeek.current ? 4000 : gsap.utils.random(14000, 28000);
     firstPeek.current = false;
     const timer = setTimeout(() => setVisible(true), delay);
     return () => {

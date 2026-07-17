@@ -41,7 +41,8 @@
       "Bash(npx --yes supabase functions deploy ipay88-backend --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
       "Bash(npx --yes supabase functions deploy ipay88-response --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
       "Bash(npx --yes supabase functions deploy ipay88-migrate --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
-      "Bash(npx --yes supabase functions delete ipay88-migrate --project-ref ahnchamqeyiqhfeezlxq)"
+      "Bash(npx --yes supabase functions delete ipay88-migrate --project-ref ahnchamqeyiqhfeezlxq)",
+      "Bash(node_modules/.bin/tsc.cmd -b)"
     ]
   }
 }

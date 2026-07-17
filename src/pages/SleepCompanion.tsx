@@ -8,12 +8,11 @@ export default function SleepCompanion() {
   const navigate = useNavigate();
   const [isPlaying, setIsPlaying] = useState(false);
   
-  // Volume controls (0 to 1)
-  const [rainVol, setRainVol] = useState(0.4);
-  const [waveVol, setWaveVol] = useState(0.3);
-  const [windVol, setWindVol] = useState(0.2);
-  const [riverVol, setRiverVol] = useState(0.2);
-  const [birdVol, setBirdVol] = useState(0.15);
+  // Volume controls (0 to 1) — warm, sleep-friendly layers only
+  const [rainVol, setRainVol] = useState(0.5);
+  const [waveVol, setWaveVol] = useState(0.22);
+  const [bowlVol, setBowlVol] = useState(0.32);
+  const [fireVol, setFireVol] = useState(0.18);
 
   // Timer: null means infinite, or minutes left
   const [timerMinutes, setTimerMinutes] = useState<number | null>(null);
@@ -32,12 +31,13 @@ export default function SleepCompanion() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rainGainRef = useRef<GainNode | null>(null);
   const waveGainRef = useRef<GainNode | null>(null);
-  const windGainRef = useRef<GainNode | null>(null);
-  const riverGainRef = useRef<GainNode | null>(null);
-  const birdGainRef = useRef<GainNode | null>(null);
+  const bowlGainRef = useRef<GainNode | null>(null);
+  const fireGainRef = useRef<GainNode | null>(null);
   const audioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
-  const waveLfoRef = useRef<OscillatorNode | null>(null);
-  const birdTimerRef = useRef<any>(null);
+  const oscNodesRef = useRef<OscillatorNode[]>([]);
+  const rainTimerRef = useRef<any>(null);
+  const bowlTimerRef = useRef<any>(null);
+  const fireTimerRef = useRef<any>(null);
 
   // Timer interval ref
   const timerIntervalRef = useRef<any>(null);
@@ -84,16 +84,12 @@ export default function SleepCompanion() {
   }, [waveVol, isPlaying]);
 
   useEffect(() => {
-    if (windGainRef.current) windGainRef.current.gain.setValueAtTime(windVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
-  }, [windVol, isPlaying]);
+    if (bowlGainRef.current) bowlGainRef.current.gain.setValueAtTime(bowlVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
+  }, [bowlVol, isPlaying]);
 
   useEffect(() => {
-    if (riverGainRef.current) riverGainRef.current.gain.setValueAtTime(riverVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
-  }, [riverVol, isPlaying]);
-
-  useEffect(() => {
-    if (birdGainRef.current) birdGainRef.current.gain.setValueAtTime(birdVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
-  }, [birdVol, isPlaying]);
+    if (fireGainRef.current) fireGainRef.current.gain.setValueAtTime(fireVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
+  }, [fireVol, isPlaying]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -125,7 +121,9 @@ export default function SleepCompanion() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Synthesize custom noises locally using Web Audio API
+  // Synthesize a warm, sleep-friendly soundscape locally with the Web Audio API.
+  // Every layer is chosen to soothe rather than startle: pink-noise rain, a
+  // slowly breathing ocean, a warm singing-bowl drone, and a cozy fireplace.
   const initAudio = () => {
     if (audioCtxRef.current) return;
 
@@ -133,197 +131,295 @@ export default function SleepCompanion() {
     const ctx = new AudioContextClass();
     audioCtxRef.current = ctx;
 
-    // 1. Create Noise Buffers
     const sampleRate = ctx.sampleRate;
-    const bufferSize = sampleRate * 2; // 2 seconds loop
+    const bufferSize = sampleRate * 3; // 3-second seamless loop
 
-    // White Noise buffer
-    const whiteBuffer = ctx.createBuffer(1, bufferSize, sampleRate);
-    const whiteData = whiteBuffer.getChannelData(0);
+    // Pink noise — softer and warmer than white noise (no harsh, anxious hiss).
+    // Paul Kellet's economical pink-noise approximation.
+    const pinkBuffer = ctx.createBuffer(1, bufferSize, sampleRate);
+    const pinkData = pinkBuffer.getChannelData(0);
+    let p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0;
     for (let i = 0; i < bufferSize; i++) {
-      whiteData[i] = Math.random() * 2 - 1;
+      const white = Math.random() * 2 - 1;
+      p0 = 0.99886 * p0 + white * 0.0555179;
+      p1 = 0.99332 * p1 + white * 0.0750759;
+      p2 = 0.96900 * p2 + white * 0.1538520;
+      p3 = 0.86650 * p3 + white * 0.3104856;
+      p4 = 0.55000 * p4 + white * 0.5329522;
+      p5 = -0.7616 * p5 - white * 0.0168980;
+      pinkData[i] = (p0 + p1 + p2 + p3 + p4 + p5 + p6 + white * 0.5362) * 0.11;
+      p6 = white * 0.115926;
     }
 
-    // Brown Noise buffer (for deep wind and wave base)
+    // Brown noise — deep, gentle rumble for the ocean bed and ember roar.
     const brownBuffer = ctx.createBuffer(1, bufferSize, sampleRate);
     const brownData = brownBuffer.getChannelData(0);
     let lastOut = 0.0;
     for (let i = 0; i < bufferSize; i++) {
       const white = Math.random() * 2 - 1;
-      brownData[i] = (lastOut + (0.02 * white)) / 1.02;
+      brownData[i] = (lastOut + 0.02 * white) / 1.02;
       lastOut = brownData[i];
       brownData[i] *= 3.5; // Amplify
     }
 
-    // --- SOUND GENERATORS ---
-
-    // A. RAIN (Filtered White Noise + Bandpass)
-    const rainSource = ctx.createBufferSource();
-    rainSource.buffer = whiteBuffer;
-    rainSource.loop = true;
-
-    const rainFilter = ctx.createBiquadFilter();
-    rainFilter.type = 'lowpass';
-    rainFilter.frequency.value = 900; // Calming rain hiss
-
+    // --- A. WATER DROPLETS (individual soft drips, never a heavy downpour) ---
     const rainGain = ctx.createGain();
     rainGain.gain.value = rainVol;
-
-    rainSource.connect(rainFilter);
-    rainFilter.connect(rainGain);
-    rainGain.connect(ctx.destination);
-
     rainGainRef.current = rainGain;
-    audioSourcesRef.current.push(rainSource);
 
-    // B. OCEAN WAVES (Brown Noise modulated by slow LFO)
+    // Small-room reverb: a synthetic impulse response (decaying noise) through
+    // a ConvolverNode. The drips are sent dry + wet, so each 'bloop' blooms in
+    // a gentle cave-like space instead of dying flat.
+    const irLen = Math.floor(sampleRate * 1.6);
+    const irBuffer = ctx.createBuffer(2, irLen, sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const irData = irBuffer.getChannelData(ch);
+      for (let i = 0; i < irLen; i++) {
+        // Exponential decay with a soft early build-up (diffuse room, no slap).
+        const env = Math.pow(1 - i / irLen, 2.6) * Math.min(1, i / (sampleRate * 0.01));
+        irData[i] = (Math.random() * 2 - 1) * env;
+      }
+    }
+    const reverb = ctx.createConvolver();
+    reverb.buffer = irBuffer;
+    const reverbLP = ctx.createBiquadFilter();
+    reverbLP.type = 'lowpass';
+    reverbLP.frequency.value = 2400; // keep the tail warm, not hissy
+    const wetGain = ctx.createGain();
+    wetGain.gain.value = 0.35; // subtle room, drips stay intimate
+
+    rainGain.connect(ctx.destination);       // dry
+    rainGain.connect(reverb);                // wet send
+    reverb.connect(reverbLP);
+    reverbLP.connect(wetGain);
+    wetGain.connect(ctx.destination);
+
+    // A real water drip is physically a resonating air bubble: a tiny noise
+    // splash on impact, then a 'bloop' whose pitch glides UP as the bubble
+    // shrinks. Modelling both parts is what makes it sound wet, not electronic.
+    const makeDrip = (at: number) => {
+      const c = audioCtxRef.current;
+      const rg = rainGainRef.current;
+      if (!c || !rg) return;
+      const loud = 0.25 + Math.random() * 0.3; // per-drip level (some near, some far)
+
+      // 1) Impact splash — a very short, soft noise tick (the surface break).
+      const spl = c.createBufferSource();
+      spl.buffer = pinkBuffer;
+      spl.loop = true;
+      const splBP = c.createBiquadFilter();
+      splBP.type = 'bandpass';
+      splBP.frequency.value = 1800 + Math.random() * 1600;
+      splBP.Q.value = 1.2;
+      const splG = c.createGain();
+      splG.gain.setValueAtTime(0.0001, at);
+      splG.gain.exponentialRampToValueAtTime(loud * 0.5, at + 0.003);
+      splG.gain.exponentialRampToValueAtTime(0.0003, at + 0.03);
+      spl.connect(splBP);
+      splBP.connect(splG);
+      splG.connect(rg);
+      spl.start(at);
+      spl.stop(at + 0.05);
+
+      // 2) Bubble 'bloop' — sine whose pitch RISES (Minnaert resonance). No FM
+      //    vibrato (that sounds synthetic); the tone stays quiet and short.
+      const osc = c.createOscillator();
+      osc.type = 'sine';
+      const f0 = 340 + Math.random() * 340; // start pitch of the bubble
+      const rise = 1.25 + Math.random() * 0.35; // gentler upward bend
+      const dur = 0.05 + Math.random() * 0.05; // short — real bloops are brief
+      osc.frequency.setValueAtTime(f0, at + 0.004);
+      osc.frequency.exponentialRampToValueAtTime(f0 * rise, at + 0.004 + dur);
+      const oscG = c.createGain();
+      oscG.gain.setValueAtTime(0.0001, at + 0.004);
+      oscG.gain.exponentialRampToValueAtTime(loud * 0.7, at + 0.014);
+      oscG.gain.exponentialRampToValueAtTime(0.0004, at + 0.004 + dur + 0.05);
+      osc.connect(oscG);
+      oscG.connect(rg);
+      osc.start(at + 0.004);
+      osc.stop(at + dur + 0.1);
+
+      // 3) Resonant body — noise rung through a high-Q bandpass sweeping with
+      //    the same pitch. Real water has this breathy, inharmonic grit that a
+      //    pure sine lacks; it's what stops it from sounding electronic.
+      const res = c.createBufferSource();
+      res.buffer = pinkBuffer;
+      res.loop = true;
+      const resBP = c.createBiquadFilter();
+      resBP.type = 'bandpass';
+      resBP.Q.value = 12 + Math.random() * 8;
+      resBP.frequency.setValueAtTime(f0, at + 0.004);
+      resBP.frequency.exponentialRampToValueAtTime(f0 * rise, at + 0.004 + dur);
+      const resG = c.createGain();
+      resG.gain.setValueAtTime(0.0001, at + 0.004);
+      resG.gain.exponentialRampToValueAtTime(loud * 0.5, at + 0.012);
+      resG.gain.exponentialRampToValueAtTime(0.0004, at + 0.004 + dur + 0.06);
+      res.connect(resBP);
+      resBP.connect(resG);
+      resG.connect(rg);
+      res.start(at + 0.004);
+      res.stop(at + dur + 0.14);
+    };
+
+    const scheduleDrips = () => {
+      if (!audioCtxRef.current) return;
+      // One unhurried drip at a time; occasionally a soft echo-drip follows.
+      makeDrip(audioCtxRef.current.currentTime + 0.02 + Math.random() * 0.3);
+      if (Math.random() < 0.18) {
+        makeDrip(audioCtxRef.current.currentTime + 0.7 + Math.random() * 0.6);
+      }
+      rainTimerRef.current = setTimeout(scheduleDrips, 3800 + Math.random() * 4500);
+    };
+    scheduleDrips();
+
+    // --- B. GENTLE OCEAN (a soft, distant hush — barely breathing) ---
     const waveSource = ctx.createBufferSource();
     waveSource.buffer = brownBuffer;
     waveSource.loop = true;
 
-    const waveFilter = ctx.createBiquadFilter();
-    waveFilter.type = 'lowpass';
-    waveFilter.frequency.value = 350; // Deeper rumble
+    const waveLP = ctx.createBiquadFilter();
+    waveLP.type = 'lowpass';
+    waveLP.frequency.value = 280; // very soft and far away, no roar
 
     const waveGain = ctx.createGain();
     waveGain.gain.value = waveVol;
 
-    // LFO to simulate rolling waves (fading volume in and out)
+    // A shallow, slow LFO — the surf barely rises and falls, so it never surges.
     const waveLfo = ctx.createOscillator();
-    waveLfo.frequency.value = 0.08; // Wave cycle every ~12.5 seconds
-    
-    const waveLfoGain = ctx.createGain();
-    waveLfoGain.gain.value = 0.35; // Modulate depth
-    
-    waveLfo.connect(waveLfoGain);
-    // Connect LFO modulation directly to waveGain node
-    waveLfoGain.connect(waveGain.gain);
+    waveLfo.frequency.value = 0.07;
+    const waveLfoDepth = ctx.createGain();
+    waveLfoDepth.gain.value = 0.09;
+    waveLfo.connect(waveLfoDepth);
+    waveLfoDepth.connect(waveGain.gain);
 
-    waveSource.connect(waveFilter);
-    waveFilter.connect(waveGain);
+    waveSource.connect(waveLP);
+    waveLP.connect(waveGain);
     waveGain.connect(ctx.destination);
-
     waveLfo.start();
-    waveLfoRef.current = waveLfo;
     waveGainRef.current = waveGain;
     audioSourcesRef.current.push(waveSource);
+    oscNodesRef.current.push(waveLfo);
 
-    // C. NIGHT WIND (Filtered Brown Noise with random-like sweeping bandpass)
-    const windSource = ctx.createBufferSource();
-    windSource.buffer = brownBuffer;
-    windSource.loop = true;
+    // --- C. SINGING BOWL (struck bowl with inharmonic partials, long ring) ---
+    const bowlGain = ctx.createGain();
+    bowlGain.gain.value = bowlVol;
+    bowlGain.connect(ctx.destination);
+    bowlGainRef.current = bowlGain;
 
-    const windFilter = ctx.createBiquadFilter();
-    windFilter.type = 'bandpass';
-    windFilter.Q.value = 2.0;
-    windFilter.frequency.value = 400;
+    // Inharmonic partial ratios typical of a Tibetan singing bowl. Each partial
+    // is voiced twice, slightly detuned, so it shimmers and beats as it rings.
+    const bowlPartials = [
+      { ratio: 1.0, gain: 0.5 },
+      { ratio: 2.74, gain: 0.3 },
+      { ratio: 5.41, gain: 0.14 },
+      { ratio: 8.9, gain: 0.07 },
+    ];
 
-    // Sweeping wind LFO
-    const windLfo = ctx.createOscillator();
-    windLfo.frequency.value = 0.05; // Gentle wind sweep
-    
-    const windLfoGain = ctx.createGain();
-    windLfoGain.gain.value = 150; // Frequency variation range
-    
-    windLfo.connect(windLfoGain);
-    windLfoGain.connect(windFilter.frequency);
-
-    const windGain = ctx.createGain();
-    windGain.gain.value = windVol;
-
-    windSource.connect(windFilter);
-    windFilter.connect(windGain);
-    windGain.connect(ctx.destination);
-
-    windLfo.start();
-    windGainRef.current = windGain;
-    audioSourcesRef.current.push(windSource);
-
-    // D. RIVER STREAM (white noise → bandpass that wobbles for flowing water)
-    const riverSource = ctx.createBufferSource();
-    riverSource.buffer = whiteBuffer;
-    riverSource.loop = true;
-
-    const riverBand = ctx.createBiquadFilter();
-    riverBand.type = 'bandpass';
-    riverBand.frequency.value = 700;
-    riverBand.Q.value = 0.7;
-
-    const riverLow = ctx.createBiquadFilter();
-    riverLow.type = 'lowpass';
-    riverLow.frequency.value = 2400; // soften the hiss into a gentle trickle
-
-    // Slow LFO wobbles the band centre → bubbling/gurgling character
-    const riverLfo = ctx.createOscillator();
-    riverLfo.frequency.value = 0.28;
-    const riverLfoGain = ctx.createGain();
-    riverLfoGain.gain.value = 260;
-    riverLfo.connect(riverLfoGain);
-    riverLfoGain.connect(riverBand.frequency);
-
-    const riverGain = ctx.createGain();
-    riverGain.gain.value = riverVol;
-
-    riverSource.connect(riverBand);
-    riverBand.connect(riverLow);
-    riverLow.connect(riverGain);
-    riverGain.connect(ctx.destination);
-
-    riverLfo.start();
-    riverGainRef.current = riverGain;
-    audioSourcesRef.current.push(riverSource);
-
-    // E. BIRD CHIRPS (bioacoustic — short frequency-swept notes at random gaps)
-    const birdGain = ctx.createGain();
-    birdGain.gain.value = birdVol;
-    birdGain.connect(ctx.destination);
-    birdGainRef.current = birdGain;
-
-    const makeChirp = (startAt: number) => {
+    const strikeBowl = (at: number) => {
       const c = audioCtxRef.current;
-      const bg = birdGainRef.current;
+      const bg = bowlGainRef.current;
       if (!c || !bg) return;
-      const notes = 1 + Math.floor(Math.random() * 3); // 1–3 syllable chirp
+      const f0 = 210 + Math.random() * 70; // a warm, mid-low bowl
+      const ring = 7 + Math.random() * 4;  // seconds of slow decay
+      bowlPartials.forEach((pt) => {
+        for (let d = 0; d < 2; d++) {
+          const osc = c.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = f0 * pt.ratio * (d === 0 ? 1 : 1.004);
+          const g = c.createGain();
+          g.gain.setValueAtTime(0.0001, at);
+          g.gain.exponentialRampToValueAtTime(pt.gain, at + 0.05); // soft mallet
+          g.gain.exponentialRampToValueAtTime(0.0001, at + ring);
+          osc.connect(g);
+          g.connect(bg);
+          osc.start(at);
+          osc.stop(at + ring + 0.1);
+        }
+      });
+    };
+
+    const scheduleBowl = () => {
+      if (!audioCtxRef.current) return;
+      strikeBowl(audioCtxRef.current.currentTime + 0.05);
+      // A new strike every ~9–15s, so each bowl fully blooms and fades first.
+      bowlTimerRef.current = setTimeout(scheduleBowl, 9000 + Math.random() * 6000);
+    };
+    scheduleBowl();
+
+    // --- D. COZY FIREPLACE (quiet ember bed + soft random crackles) ---
+    const fireGain = ctx.createGain();
+    fireGain.gain.value = fireVol;
+    fireGain.connect(ctx.destination);
+    fireGainRef.current = fireGain;
+
+    // Steady ember 'roar' — a very quiet brown-noise bed under the crackles.
+    const emberSource = ctx.createBufferSource();
+    emberSource.buffer = brownBuffer;
+    emberSource.loop = true;
+    const emberLP = ctx.createBiquadFilter();
+    emberLP.type = 'lowpass';
+    emberLP.frequency.value = 500;
+    const emberGain = ctx.createGain();
+    emberGain.gain.value = 0.4;
+    emberSource.connect(emberLP);
+    emberLP.connect(emberGain);
+    emberGain.connect(fireGain);
+    audioSourcesRef.current.push(emberSource);
+
+    // Short, warm, filtered noise ticks fired at random gaps → gentle crackle.
+    const makeCrackle = (startAt: number) => {
+      const c = audioCtxRef.current;
+      const fg = fireGainRef.current;
+      if (!c || !fg) return;
+      const pops = 1 + Math.floor(Math.random() * 3);
       let t = startAt;
-      for (let i = 0; i < notes; i++) {
-        const osc = c.createOscillator();
-        osc.type = Math.random() < 0.5 ? 'sine' : 'triangle';
+      for (let i = 0; i < pops; i++) {
+        const src = c.createBufferSource();
+        src.buffer = pinkBuffer;
+        src.loop = true;
+        const bp = c.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 900 + Math.random() * 1500;
+        bp.Q.value = 4 + Math.random() * 4;
         const g = c.createGain();
-        const base = 2000 + Math.random() * 2200;
-        const dur = 0.06 + Math.random() * 0.08;
-        osc.frequency.setValueAtTime(base, t);
-        osc.frequency.linearRampToValueAtTime(base * (1.15 + Math.random() * 0.35), t + dur * 0.4);
-        osc.frequency.linearRampToValueAtTime(base * 0.82, t + dur);
+        const dur = 0.012 + Math.random() * 0.035; // very short warm tick
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.linearRampToValueAtTime(0.5, t + 0.008);
-        g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-        osc.connect(g);
-        g.connect(bg);
-        osc.start(t);
-        osc.stop(t + dur + 0.03);
-        t += dur + 0.02 + Math.random() * 0.06;
+        g.gain.linearRampToValueAtTime(0.4 + Math.random() * 0.4, t + 0.002);
+        g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+        src.connect(bp);
+        bp.connect(g);
+        g.connect(fg);
+        src.start(t);
+        src.stop(t + dur + 0.02);
+        t += 0.01 + Math.random() * 0.05;
       }
     };
 
-    const scheduleBirds = () => {
+    const scheduleFire = () => {
       if (!audioCtxRef.current) return;
-      makeChirp(audioCtxRef.current.currentTime + 0.03);
-      birdTimerRef.current = setTimeout(scheduleBirds, 700 + Math.random() * 2600);
+      makeCrackle(audioCtxRef.current.currentTime + 0.02);
+      fireTimerRef.current = setTimeout(scheduleFire, 250 + Math.random() * 900);
     };
-    scheduleBirds();
+    scheduleFire();
 
-    // Start playback
-    rainSource.start();
+    // Start the looping bed sources together.
     waveSource.start();
-    windSource.start();
-    riverSource.start();
+    emberSource.start();
   };
 
   const stopAudio = () => {
-    // Stop the bird-chirp scheduler first
-    if (birdTimerRef.current) {
-      clearTimeout(birdTimerRef.current);
-      birdTimerRef.current = null;
+    // Stop every scheduler first so no new sounds are queued.
+    if (rainTimerRef.current) {
+      clearTimeout(rainTimerRef.current);
+      rainTimerRef.current = null;
+    }
+    if (bowlTimerRef.current) {
+      clearTimeout(bowlTimerRef.current);
+      bowlTimerRef.current = null;
+    }
+    if (fireTimerRef.current) {
+      clearTimeout(fireTimerRef.current);
+      fireTimerRef.current = null;
     }
 
     audioSourcesRef.current.forEach((src) => {
@@ -333,12 +429,12 @@ export default function SleepCompanion() {
     });
     audioSourcesRef.current = [];
 
-    if (waveLfoRef.current) {
+    oscNodesRef.current.forEach((osc) => {
       try {
-        waveLfoRef.current.stop();
+        osc.stop();
       } catch (e) {}
-      waveLfoRef.current = null;
-    }
+    });
+    oscNodesRef.current = [];
 
     if (audioCtxRef.current) {
       try {
@@ -466,7 +562,7 @@ export default function SleepCompanion() {
           <div className="space-y-3.5">
             {/* Rain Slider */}
             <div className="flex items-center gap-4">
-              <span className="text-xs font-semibold text-slate-300 w-16 shrink-0">🌧️ Hujan</span>
+              <span className="text-xs font-semibold text-slate-300 w-24 shrink-0">💧 Tetesan Air</span>
               <input
                 type="range"
                 min="0"
@@ -483,7 +579,7 @@ export default function SleepCompanion() {
 
             {/* Wave Slider */}
             <div className="flex items-center gap-4">
-              <span className="text-xs font-semibold text-slate-300 w-16 shrink-0">🌊 Ombak</span>
+              <span className="text-xs font-semibold text-slate-300 w-24 shrink-0">🌊 Ombak Tenang</span>
               <input
                 type="range"
                 min="0"
@@ -498,54 +594,37 @@ export default function SleepCompanion() {
               </span>
             </div>
 
-            {/* Night Wind Slider */}
+            {/* Singing Bowl Slider */}
             <div className="flex items-center gap-4">
-              <span className="text-xs font-semibold text-slate-300 w-16 shrink-0">🍃 Angin</span>
+              <span className="text-xs font-semibold text-slate-300 w-24 shrink-0">🔔 Singing Bowl</span>
               <input
                 type="range"
                 min="0"
                 max="1"
                 step="0.05"
-                value={windVol}
-                onChange={(e) => setWindVol(parseFloat(e.target.value))}
+                value={bowlVol}
+                onChange={(e) => setBowlVol(parseFloat(e.target.value))}
                 className="flex-grow accent-jiwo-primary h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-3xs font-bold text-slate-500 w-6 text-right">
-                {Math.round(windVol * 100)}%
+                {Math.round(bowlVol * 100)}%
               </span>
             </div>
 
-            {/* River Stream Slider */}
+            {/* Cozy Fireplace Slider */}
             <div className="flex items-center gap-4">
-              <span className="text-xs font-semibold text-slate-300 w-16 shrink-0">🏞️ Sungai</span>
+              <span className="text-xs font-semibold text-slate-300 w-24 shrink-0">🔥 Perapian</span>
               <input
                 type="range"
                 min="0"
                 max="1"
                 step="0.05"
-                value={riverVol}
-                onChange={(e) => setRiverVol(parseFloat(e.target.value))}
+                value={fireVol}
+                onChange={(e) => setFireVol(parseFloat(e.target.value))}
                 className="flex-grow accent-jiwo-primary h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-3xs font-bold text-slate-500 w-6 text-right">
-                {Math.round(riverVol * 100)}%
-              </span>
-            </div>
-
-            {/* Bird Chirps Slider */}
-            <div className="flex items-center gap-4">
-              <span className="text-xs font-semibold text-slate-300 w-16 shrink-0">🐦 Burung</span>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={birdVol}
-                onChange={(e) => setBirdVol(parseFloat(e.target.value))}
-                className="flex-grow accent-jiwo-primary h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-3xs font-bold text-slate-500 w-6 text-right">
-                {Math.round(birdVol * 100)}%
+                {Math.round(fireVol * 100)}%
               </span>
             </div>
           </div>
