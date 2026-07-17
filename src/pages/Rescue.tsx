@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { setSceneMood } from '@/lib/sceneMood';
 import JiwoMascot from '@/components/JiwoMascot';
 import BreathingJiwo from '@/components/BreathingJiwo';
-import { ArrowRight, RefreshCw, Sparkles, BookOpen } from 'lucide-react';
+import { ArrowRight, RefreshCw, Sparkles, BookOpen, Volume2, VolumeX } from 'lucide-react';
 
 // Lazy-loaded so three.js stays out of the critical bundle
 const CalmScene = lazy(() => import('@/components/three/CalmScene'));
@@ -24,6 +24,47 @@ export default function Rescue() {
   const [breatheRound, setBreatheRound] = useState(1);
   const maxRounds = 3;
   const breatheTimer = useRef<any>(null);
+
+  // TTS States
+  const [isMuted, setIsMuted] = useState(false);
+  const isMutedRef = useRef(isMuted);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  // Clean speech synthesis when component unmounts
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+    }
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const speak = (text: string) => {
+    if (isMutedRef.current || typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'id-ID';
+      
+      const voices = window.speechSynthesis.getVoices();
+      const idVoice = voices.find(v => v.lang.startsWith('id'));
+      if (idVoice) {
+        utterance.voice = idVoice;
+      }
+      
+      utterance.rate = 0.85; // Natural slow calm rate
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.error('TTS error:', e);
+    }
+  };
 
   // Tint the ambient 3D scene to follow the session's emotional arc
   useEffect(() => {
@@ -71,6 +112,7 @@ export default function Rescue() {
     setMascotState('calm');
     setBreathePhase('inhale');
     setBreatheSeconds(4);
+    speak("Tarik napas Anda perlahan.");
 
     breatheTimer.current = setInterval(() => {
       setBreatheSeconds((prevSec) => {
@@ -81,9 +123,11 @@ export default function Rescue() {
           setBreathePhase((prevPhase) => {
             if (prevPhase === 'inhale') {
               setBreatheSeconds(2);
+              speak("Tahan napas.");
               return 'hold';
             } else if (prevPhase === 'hold') {
               setBreatheSeconds(6);
+              speak("Hembuskan perlahan.");
               return 'exhale';
             } else {
               // End of round
@@ -96,6 +140,7 @@ export default function Rescue() {
                 }
                 // Next round
                 setBreatheSeconds(4);
+                speak("Tarik napas kembali.");
                 return prevRound + 1;
               });
               return 'inhale';
@@ -109,6 +154,32 @@ export default function Rescue() {
     return () => {
       if (breatheTimer.current) clearInterval(breatheTimer.current);
     };
+  }, [step]);
+
+  // Grounding TTS Controller
+  useEffect(() => {
+    if (step === 'grounding') {
+      const currentGrounding = groundingTexts[groundingIndex as keyof typeof groundingTexts];
+      if (groundingIndex === 5) {
+        speak("Sekarang, mari lakukan teknik grounding untuk meredakan overthinking. Pertama, sebutkan " + currentGrounding.desc);
+      } else {
+        speak(`Selanjutnya, sebutkan ${currentGrounding.title}. ${currentGrounding.desc}`);
+      }
+    }
+  }, [step, groundingIndex]);
+
+  // Affirmation TTS Controller
+  useEffect(() => {
+    if (step === 'affirmation' && selectedAffirmation) {
+      speak("Ikuti afirmasi penenang berikut, ucapkan di dalam hati Anda: " + selectedAffirmation);
+    }
+  }, [step, selectedAffirmation]);
+
+  // Complete TTS Controller
+  useEffect(() => {
+    if (step === 'complete') {
+      speak("Luar biasa. Sesi tenang telah selesai. Jiwo bangga kamu berhasil melaluinya. Bagaimana perasaanmu sekarang?");
+    }
   }, [step]);
 
   const handleStart = () => {
@@ -150,6 +221,37 @@ export default function Rescue() {
       <Suspense fallback={null}>
         <CalmScene />
       </Suspense>
+
+      {/* Floating Sound Toggle */}
+      <div className="absolute top-2 right-5 z-20">
+        <button
+          onClick={() => {
+            const nextMuted = !isMuted;
+            setIsMuted(nextMuted);
+            if (nextMuted) {
+              if (typeof window !== 'undefined' && window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+              }
+            } else {
+              // Speak current step context as confirmation
+              setTimeout(() => {
+                if (step === 'breathing') {
+                  speak(breathePhase === 'inhale' ? 'Tarik Napas' : breathePhase === 'hold' ? 'Tahan napas' : 'Hembuskan perlahan');
+                } else if (step === 'grounding') {
+                  const currentGrounding = groundingTexts[groundingIndex as keyof typeof groundingTexts];
+                  speak(`${currentGrounding.title}. ${currentGrounding.desc}`);
+                } else if (step === 'affirmation') {
+                  speak(selectedAffirmation);
+                }
+              }, 100);
+            }
+          }}
+          className="p-2.5 rounded-full bg-white/80 backdrop-blur-xs border border-jiwo-primaryLight/35 text-jiwo-primary hover:bg-white transition shadow-3xs"
+          title={isMuted ? "Aktifkan Suara" : "Matikan Suara"}
+        >
+          {isMuted ? <VolumeX className="w-4.5 h-4.5" /> : <Volume2 className="w-4.5 h-4.5" />}
+        </button>
+      </div>
 
       {/* Step Screen renders */}
 

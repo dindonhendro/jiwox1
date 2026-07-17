@@ -87,6 +87,39 @@ export default function JiwoFilm() {
     let lastNow = performance.now();
     let currentLabel = '';
 
+    // Rising light motes — soft dots that float up like dust in sunlight
+    const motes = Array.from({ length: 14 }, (_, i) => ({
+      x: (i + 0.5) / 14 + (Math.random() - 0.5) * 0.05,
+      phase: Math.random(),
+      r: 1.5 + Math.random() * 2.5,
+      speed: 0.018 + Math.random() * 0.028,
+      sway: 0.008 + Math.random() * 0.014,
+      swayFreq: 0.3 + Math.random() * 0.5,
+    }));
+
+    // Fixed twinkle points — tiny 4-point stars that fade in and out
+    const sparkles = Array.from({ length: 6 }, () => ({
+      x: 0.08 + Math.random() * 0.84,
+      y: 0.08 + Math.random() * 0.5,
+      size: 3 + Math.random() * 3,
+      phase: Math.random() * Math.PI * 2,
+      freq: 0.5 + Math.random() * 0.7,
+    }));
+
+    const drawSparkle = (x: number, y: number, s: number, a: number, rgb: number[]) => {
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = `rgb(${rgb.join(',')})`;
+      ctx.beginPath();
+      ctx.moveTo(x, y - s);
+      ctx.quadraticCurveTo(x, y, x + s, y);
+      ctx.quadraticCurveTo(x, y, x, y + s);
+      ctx.quadraticCurveTo(x, y, x - s, y);
+      ctx.quadraticCurveTo(x, y, x, y - s);
+      ctx.fill();
+      ctx.restore();
+    };
+
     const drawMascot = (img: HTMLImageElement, alpha: number, t: number, rot: number) => {
       if (!img.complete || !img.naturalWidth || alpha <= 0.003) return;
       const breathe = 1 + 0.02 * Math.sin(t * 1.1);
@@ -142,6 +175,38 @@ export default function JiwoFilm() {
       ctx.fillStyle = rg;
       ctx.fillRect(0, 0, w, h);
 
+      // Rising light motes in the chapter colour
+      for (const m of motes) {
+        const yFrac = 1.08 - (((t * m.speed) + m.phase) % 1.16);
+        const x = (m.x + Math.sin(t * m.swayFreq + m.phase * 9) * m.sway) * w;
+        const y = yFrac * h;
+        const fade = Math.min(1, (1.05 - yFrac) * 3, (yFrac + 0.05) * 3);
+        if (fade <= 0) continue;
+        ctx.beginPath();
+        ctx.arc(x, y, m.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${halo.join(',')},${0.35 * fade})`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y, m.r * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${0.5 * fade})`;
+        ctx.fill();
+      }
+
+      // Gentle twinkles
+      for (const s of sparkles) {
+        const a = Math.max(0, Math.sin(t * s.freq + s.phase));
+        if (a < 0.15) continue;
+        drawSparkle(s.x * w, s.y * h, s.size * (0.7 + 0.3 * a), a * 0.55, halo);
+      }
+
+      // Soft breathing shadow under Jiwo (counter-scales with the bob)
+      const bobNow = Math.sin(t * 0.8) * 5;
+      const shadowW = w * 0.2 * (1 - bobNow / 40);
+      ctx.beginPath();
+      ctx.ellipse(w / 2, h * 0.92, shadowW, h * 0.028, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(44,62,63,0.10)';
+      ctx.fill();
+
       drawMascot(imgs[A.img], 1 - mix, t, A.rot * (1 - mix));
       if (ib !== ia) drawMascot(imgs[B.img], mix, t, B.rot * mix);
 
@@ -190,7 +255,7 @@ export default function JiwoFilm() {
 
       {/* Chapter label */}
       <div className="absolute top-3.5 left-4 text-3xs font-extrabold uppercase tracking-[0.25em] text-jiwo-textDark/55">
-        Film Jiwo · {label}
+        Jiwo · {label}
       </div>
 
       {/* Play / pause */}

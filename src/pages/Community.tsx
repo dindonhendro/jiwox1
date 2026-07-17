@@ -52,10 +52,46 @@ interface Workshop {
   max_participants: number;
 }
 
+const DUMMY_WORKSHOPS: Workshop[] = [
+  {
+    id: 'dummy-journaling',
+    title: 'Journaling: Mengurai Pikiran & Emosi',
+    description: 'Sesi menulis ekspresif terpandu untuk menuangkan perasaan, mengenali pola pikir negatif, dan membangun kejernihan mental.',
+    instructor: 'Nabila, M.Psi., Psikolog',
+    date: 'Sabtu, 18 Juli 2026',
+    time: '09:00 - 10:30',
+    link: 'https://zoom.us/j/dummy-journaling',
+    category: 'Self-Reflection',
+    max_participants: 30
+  },
+  {
+    id: 'dummy-yoga-nindra',
+    title: 'Yoga Nindra: Relaksasi Jiwa & Raga',
+    description: 'Latihan meditasi tidur (yogic sleep) untuk melepas stres kronis, menyeimbangkan emosi, dan memulihkan energi tubuh.',
+    instructor: 'Yogi Adi Nugroho',
+    date: 'Minggu, 19 Juli 2026',
+    time: '19:30 - 20:30',
+    link: 'https://zoom.us/j/dummy-yoga-nidra',
+    category: 'Mindfulness',
+    max_participants: 50
+  },
+  {
+    id: 'dummy-reiki',
+    title: 'Reiki: Penyelarasan Energi Tubuh',
+    description: 'Sesi meditasi energi holistik untuk menyelaraskan cakra, mengurangi kecemasan, dan mempercepat proses self-healing alami.',
+    instructor: 'Master Reiki Jun',
+    date: 'Senin, 20 Juli 2026',
+    time: '16:00 - 17:00',
+    link: 'https://zoom.us/j/dummy-reiki',
+    category: 'Energy Healing',
+    max_participants: 20
+  }
+];
+
 export default function Community() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'feed' | 'workshops'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'workshops'>('workshops');
 
   // Feed states
   const [posts, setPosts] = useState<Post[]>([]);
@@ -270,7 +306,7 @@ export default function Community() {
         .order('created_at', { ascending: true });
 
       if (wsError) throw wsError;
-      setWorkshops(wsData || []);
+      setWorkshops([...DUMMY_WORKSHOPS, ...(wsData || [])]);
 
       // 2. Fetch user's registrations
       const { data: regData, error: regError } = await supabase
@@ -279,10 +315,17 @@ export default function Community() {
         .eq('user_id', currentUser.id);
 
       if (regError) throw regError;
-      setRegistrations((regData || []).map((r: any) => r.workshop_id));
+      
+      const dbRegistrations = (regData || []).map((r: any) => r.workshop_id);
+      const savedDummyRegs = JSON.parse(localStorage.getItem('dummy_registrations') || '[]');
+      setRegistrations([...dbRegistrations, ...savedDummyRegs]);
 
     } catch (err) {
       console.error('Error fetching workshops:', err);
+      // Fallback
+      setWorkshops(DUMMY_WORKSHOPS);
+      const savedDummyRegs = JSON.parse(localStorage.getItem('dummy_registrations') || '[]');
+      setRegistrations(savedDummyRegs);
     } finally {
       setWorkshopsLoading(false);
     }
@@ -296,25 +339,43 @@ export default function Community() {
     try {
       if (isRegistered) {
         // Cancel pendaftaran
-        const { error } = await supabase
-          .from('workshop_registrations')
-          .delete()
-          .eq('workshop_id', workshopId)
-          .eq('user_id', currentUser.id);
+        if (workshopId.startsWith('dummy-')) {
+          setRegistrations(prev => {
+            const next = prev.filter(id => id !== workshopId);
+            const dummyNext = next.filter(id => id.startsWith('dummy-'));
+            localStorage.setItem('dummy_registrations', JSON.stringify(dummyNext));
+            return next;
+          });
+        } else {
+          const { error } = await supabase
+            .from('workshop_registrations')
+            .delete()
+            .eq('workshop_id', workshopId)
+            .eq('user_id', currentUser.id);
 
-        if (error) throw error;
-        setRegistrations(prev => prev.filter(id => id !== workshopId));
+          if (error) throw error;
+          setRegistrations(prev => prev.filter(id => id !== workshopId));
+        }
       } else {
         // Daftar
-        const { error } = await supabase
-          .from('workshop_registrations')
-          .insert({
-            workshop_id: workshopId,
-            user_id: currentUser.id
+        if (workshopId.startsWith('dummy-')) {
+          setRegistrations(prev => {
+            const next = [...prev, workshopId];
+            const dummyNext = next.filter(id => id.startsWith('dummy-'));
+            localStorage.setItem('dummy_registrations', JSON.stringify(dummyNext));
+            return next;
           });
+        } else {
+          const { error } = await supabase
+            .from('workshop_registrations')
+            .insert({
+              workshop_id: workshopId,
+              user_id: currentUser.id
+            });
 
-        if (error) throw error;
-        setRegistrations(prev => [...prev, workshopId]);
+          if (error) throw error;
+          setRegistrations(prev => [...prev, workshopId]);
+        }
       }
     } catch (err: any) {
       alert(`Gagal memproses pendaftaran: ${err.message}`);
@@ -356,16 +417,7 @@ export default function Community() {
 
       {/* Tabs */}
       <div className="flex bg-jiwo-blueLight/50 p-1.5 rounded-2xl border border-jiwo-primaryLight/20">
-        <button
-          onClick={() => setActiveTab('feed')}
-          className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition ${
-            activeTab === 'feed'
-              ? 'bg-white text-jiwo-primary shadow-xs'
-              : 'text-jiwo-textMuted hover:text-jiwo-textDark'
-          }`}
-        >
-          Curhat & Feed
-        </button>
+        {/* Curhat & Feed button is hidden per user request */}
         <button
           onClick={() => setActiveTab('workshops')}
           className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition ${
