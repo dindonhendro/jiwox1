@@ -15,6 +15,7 @@ import Visualization from '@/pages/Visualization';
 import Consultation from '@/pages/Consultation';
 import Community from '@/pages/Community';
 import MoodStats from '@/pages/MoodStats';
+import PaymentResult from '@/pages/PaymentResult';
 
 // The animated landing lives as a static file outside the SPA. Any /welcome
 // variant that reaches the router gets forwarded to the real file so the
@@ -68,6 +69,8 @@ export default function App() {
         {/* Public Route */}
         <Route path="/login" element={<Login />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        {/* Public so the iPay88 browser redirect always lands (no auth-race gate). */}
+        <Route path="/result" element={<PaymentResult />} />
         <Route path="/welcome" element={<WelcomeRedirect />} />
         <Route path="/welcome/*" element={<WelcomeRedirect />} />
 

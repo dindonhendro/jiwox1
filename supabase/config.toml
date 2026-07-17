@@ -1,0 +1,15 @@
+project_id = "ahnchamqeyiqhfeezlxq"
+
+# iPay88 calls these two endpoints itself (server-to-server webhook and the
+# browser redirect). Neither can present a Supabase JWT, so JWT verification must
+# be OFF. Security for the webhook comes from the SHA256 signature check inside
+# ipay88-backend, not from Supabase auth.
+[functions.ipay88-backend]
+verify_jwt = false
+
+[functions.ipay88-response]
+verify_jwt = false
+
+# The checkout initiator is called by the logged-in SPA, so it keeps JWT auth on.
+[functions.ipay88-checkout]
+verify_jwt = true

@@ -12,6 +12,8 @@ export default function SleepCompanion() {
   const [rainVol, setRainVol] = useState(0.4);
   const [waveVol, setWaveVol] = useState(0.3);
   const [windVol, setWindVol] = useState(0.2);
+  const [riverVol, setRiverVol] = useState(0.2);
+  const [birdVol, setBirdVol] = useState(0.15);
 
   // Timer: null means infinite, or minutes left
   const [timerMinutes, setTimerMinutes] = useState<number | null>(null);
@@ -31,8 +33,11 @@ export default function SleepCompanion() {
   const rainGainRef = useRef<GainNode | null>(null);
   const waveGainRef = useRef<GainNode | null>(null);
   const windGainRef = useRef<GainNode | null>(null);
+  const riverGainRef = useRef<GainNode | null>(null);
+  const birdGainRef = useRef<GainNode | null>(null);
   const audioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const waveLfoRef = useRef<OscillatorNode | null>(null);
+  const birdTimerRef = useRef<any>(null);
 
   // Timer interval ref
   const timerIntervalRef = useRef<any>(null);
@@ -81,6 +86,14 @@ export default function SleepCompanion() {
   useEffect(() => {
     if (windGainRef.current) windGainRef.current.gain.setValueAtTime(windVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
   }, [windVol, isPlaying]);
+
+  useEffect(() => {
+    if (riverGainRef.current) riverGainRef.current.gain.setValueAtTime(riverVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
+  }, [riverVol, isPlaying]);
+
+  useEffect(() => {
+    if (birdGainRef.current) birdGainRef.current.gain.setValueAtTime(birdVol * (isPlaying ? 1 : 0), audioCtxRef.current?.currentTime || 0);
+  }, [birdVol, isPlaying]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -226,13 +239,93 @@ export default function SleepCompanion() {
     windGainRef.current = windGain;
     audioSourcesRef.current.push(windSource);
 
+    // D. RIVER STREAM (white noise → bandpass that wobbles for flowing water)
+    const riverSource = ctx.createBufferSource();
+    riverSource.buffer = whiteBuffer;
+    riverSource.loop = true;
+
+    const riverBand = ctx.createBiquadFilter();
+    riverBand.type = 'bandpass';
+    riverBand.frequency.value = 700;
+    riverBand.Q.value = 0.7;
+
+    const riverLow = ctx.createBiquadFilter();
+    riverLow.type = 'lowpass';
+    riverLow.frequency.value = 2400; // soften the hiss into a gentle trickle
+
+    // Slow LFO wobbles the band centre → bubbling/gurgling character
+    const riverLfo = ctx.createOscillator();
+    riverLfo.frequency.value = 0.28;
+    const riverLfoGain = ctx.createGain();
+    riverLfoGain.gain.value = 260;
+    riverLfo.connect(riverLfoGain);
+    riverLfoGain.connect(riverBand.frequency);
+
+    const riverGain = ctx.createGain();
+    riverGain.gain.value = riverVol;
+
+    riverSource.connect(riverBand);
+    riverBand.connect(riverLow);
+    riverLow.connect(riverGain);
+    riverGain.connect(ctx.destination);
+
+    riverLfo.start();
+    riverGainRef.current = riverGain;
+    audioSourcesRef.current.push(riverSource);
+
+    // E. BIRD CHIRPS (bioacoustic — short frequency-swept notes at random gaps)
+    const birdGain = ctx.createGain();
+    birdGain.gain.value = birdVol;
+    birdGain.connect(ctx.destination);
+    birdGainRef.current = birdGain;
+
+    const makeChirp = (startAt: number) => {
+      const c = audioCtxRef.current;
+      const bg = birdGainRef.current;
+      if (!c || !bg) return;
+      const notes = 1 + Math.floor(Math.random() * 3); // 1–3 syllable chirp
+      let t = startAt;
+      for (let i = 0; i < notes; i++) {
+        const osc = c.createOscillator();
+        osc.type = Math.random() < 0.5 ? 'sine' : 'triangle';
+        const g = c.createGain();
+        const base = 2000 + Math.random() * 2200;
+        const dur = 0.06 + Math.random() * 0.08;
+        osc.frequency.setValueAtTime(base, t);
+        osc.frequency.linearRampToValueAtTime(base * (1.15 + Math.random() * 0.35), t + dur * 0.4);
+        osc.frequency.linearRampToValueAtTime(base * 0.82, t + dur);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.5, t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+        osc.connect(g);
+        g.connect(bg);
+        osc.start(t);
+        osc.stop(t + dur + 0.03);
+        t += dur + 0.02 + Math.random() * 0.06;
+      }
+    };
+
+    const scheduleBirds = () => {
+      if (!audioCtxRef.current) return;
+      makeChirp(audioCtxRef.current.currentTime + 0.03);
+      birdTimerRef.current = setTimeout(scheduleBirds, 700 + Math.random() * 2600);
+    };
+    scheduleBirds();
+
     // Start playback
     rainSource.start();
     waveSource.start();
     windSource.start();
+    riverSource.start();
   };
 
   const stopAudio = () => {
+    // Stop the bird-chirp scheduler first
+    if (birdTimerRef.current) {
+      clearTimeout(birdTimerRef.current);
+      birdTimerRef.current = null;
+    }
+
     audioSourcesRef.current.forEach((src) => {
       try {
         src.stop();
@@ -419,6 +512,40 @@ export default function SleepCompanion() {
               />
               <span className="text-3xs font-bold text-slate-500 w-6 text-right">
                 {Math.round(windVol * 100)}%
+              </span>
+            </div>
+
+            {/* River Stream Slider */}
+            <div className="flex items-center gap-4">
+              <span className="text-xs font-semibold text-slate-300 w-16 shrink-0">🏞️ Sungai</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={riverVol}
+                onChange={(e) => setRiverVol(parseFloat(e.target.value))}
+                className="flex-grow accent-jiwo-primary h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-3xs font-bold text-slate-500 w-6 text-right">
+                {Math.round(riverVol * 100)}%
+              </span>
+            </div>
+
+            {/* Bird Chirps Slider */}
+            <div className="flex items-center gap-4">
+              <span className="text-xs font-semibold text-slate-300 w-16 shrink-0">🐦 Burung</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={birdVol}
+                onChange={(e) => setBirdVol(parseFloat(e.target.value))}
+                className="flex-grow accent-jiwo-primary h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-3xs font-bold text-slate-500 w-6 text-right">
+                {Math.round(birdVol * 100)}%
               </span>
             </div>
           </div>

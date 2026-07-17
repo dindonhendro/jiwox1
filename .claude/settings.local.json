@@ -33,7 +33,15 @@
       "mcp__visualize__read_me",
       "mcp__visualize__show_widget",
       "PowerShell(Get-ChildItem \"public\\\\jiwo\" | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB\\)}}, LastWriteTime | Sort-Object Name)",
-      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:5174/jiwo/sleep.png\" -Method HEAD -UseBasicParsing -TimeoutSec 15; Write-Output \"sleep.png HTTP: $\\($r.StatusCode\\) type=$\\($r.Headers['Content-Type']\\) len=$\\($r.Headers['Content-Length']\\)\" } catch { Write-Output \"sleep.png GAGAL: $\\([int]$_.Exception.Response.StatusCode\\)\" })"
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:5174/jiwo/sleep.png\" -Method HEAD -UseBasicParsing -TimeoutSec 15; Write-Output \"sleep.png HTTP: $\\($r.StatusCode\\) type=$\\($r.Headers['Content-Type']\\) len=$\\($r.Headers['Content-Length']\\)\" } catch { Write-Output \"sleep.png GAGAL: $\\([int]$_.Exception.Response.StatusCode\\)\" })",
+      "WebFetch(domain:ipay88.co.id)",
+      "Bash(npx tsc *)",
+      "Bash(npx --yes supabase secrets set IPAY88_MERCHANT_CODE=ID02064 IPAY88_MERCHANT_KEY=5vOy5imq5v IPAY88_API_URL=https://sandbox.ipay88.co.id/ePayment/WebService/PaymentAPI/Checkout IPAY88_PAYMENT_ID=78 PUBLIC_BASE_URL=http://localhost:5174 --project-ref ahnchamqeyiqhfeezlxq)",
+      "Bash(npx --yes supabase functions deploy ipay88-checkout --project-ref ahnchamqeyiqhfeezlxq)",
+      "Bash(npx --yes supabase functions deploy ipay88-backend --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
+      "Bash(npx --yes supabase functions deploy ipay88-response --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
+      "Bash(npx --yes supabase functions deploy ipay88-migrate --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
+      "Bash(npx --yes supabase functions delete ipay88-migrate --project-ref ahnchamqeyiqhfeezlxq)"
     ]
   }
 }

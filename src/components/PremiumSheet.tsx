@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { X, Star, Check, MessageCircle, BookOpen, LineChart, Compass } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, Star, Check, MessageCircle, BookOpen, LineChart, Compass, Loader2 } from 'lucide-react';
 import { PRICE_MONTHLY, PRICE_EARLYBIRD } from '@/lib/limits';
+import { startIpay88Checkout } from '@/lib/ipay88';
 
 interface PremiumSheetProps {
   open: boolean;
@@ -19,12 +20,35 @@ const BENEFITS = [
  * locked cards. Payment is a placeholder for now — no billing wired yet.
  */
 export default function PremiumSheet({ open, onClose }: PremiumSheetProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // Reset transient state whenever the sheet is reopened.
+  useEffect(() => {
+    if (open) {
+      setLoading(false);
+      setError(null);
+    }
+  }, [open]);
+
+  const handleSubscribe = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Early-bird monthly QRIS via iPay88. Redirects the browser on success.
+      await startIpay88Checkout('earlybird');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Terjadi kesalahan. Coba lagi ya.');
+      setLoading(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -79,13 +103,24 @@ export default function PremiumSheet({ open, onClose }: PremiumSheetProps) {
         <p className="text-3xs text-center text-jiwo-primary font-bold mb-4">✨ Harga early-bird untuk pengguna pertama</p>
 
         <button
-          onClick={() => alert('Pembayaran segera hadir 💙\nTerima kasih sudah tertarik — fitur langganan sedang disiapkan.')}
-          className="w-full bg-gradient-to-r from-jiwo-primary to-jiwo-blueCalm text-white font-bold py-3.5 rounded-2xl shadow-md hover:shadow-lg transition"
+          onClick={handleSubscribe}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-jiwo-primary to-jiwo-blueCalm text-white font-bold py-3.5 rounded-2xl shadow-md hover:shadow-lg transition disabled:opacity-70"
         >
-          Mulai Premium
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Mengarahkan ke QRIS…
+            </>
+          ) : (
+            'Bayar dengan QRIS'
+          )}
         </button>
+        {error && (
+          <p className="text-3xs text-center text-red-500 mt-2 font-semibold">{error}</p>
+        )}
         <p className="text-4xs text-center text-jiwo-textMuted mt-3">
-          Fitur keselamatan (Rescue, Bantuan Krisis) selalu gratis untuk semua.
+          Pembayaran aman via iPay88 (QRIS). Fitur keselamatan (Rescue, Bantuan Krisis) selalu gratis untuk semua.
         </p>
       </div>
     </div>
