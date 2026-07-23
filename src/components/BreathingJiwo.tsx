@@ -4,8 +4,8 @@ import JiwoMascot from './JiwoMascot';
 
 type Phase = 'inhale' | 'hold' | 'exhale';
 
-// Must stay in sync with the Rescue breathing pacing (4-2-6)
-const PHASE_SEC: Record<Phase, number> = { inhale: 4, hold: 2, exhale: 6 };
+// Must stay in sync with the Rescue breathing pacing (5-0-5)
+const PHASE_SEC: Record<Phase, number> = { inhale: 5, hold: 0, exhale: 5 };
 
 interface BreathingJiwoProps {
   phase: Phase;

@@ -25,44 +25,69 @@ export default function Rescue() {
   const maxRounds = 3;
   const breatheTimer = useRef<any>(null);
 
-  // TTS States
+  // Audio Playback States & Refs
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(isMuted);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const bgAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
-  // Clean speech synthesis when component unmounts
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.getVoices();
-    }
-    return () => {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
+  const playBgMusic = () => {
+    if (isMutedRef.current) return;
+    try {
+      if (!bgAudioRef.current) {
+        const audio = new Audio('/audio/rescue/ambient_bg.mp4');
+        audio.loop = true;
+        audio.volume = 0.25; // Soft ambient volume level
+        bgAudioRef.current = audio;
       }
+      bgAudioRef.current.play().catch(err => {
+        console.log("Background music play blocked or interrupted:", err);
+      });
+    } catch (e) {
+      console.error('Background music play error:', e);
+    }
+  };
+
+  const stopBgMusic = () => {
+    if (bgAudioRef.current) {
+      bgAudioRef.current.pause();
+      bgAudioRef.current.src = '';
+      bgAudioRef.current = null;
+    }
+  };
+
+  // Clean up audio when component unmounts
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      stopBgMusic();
     };
   }, []);
 
-  const speak = (text: string) => {
-    if (isMutedRef.current || typeof window === 'undefined' || !window.speechSynthesis) return;
-
+  const playAudio = (file: string, onEnded?: () => void) => {
+    if (isMutedRef.current) return;
     try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'id-ID';
-      
-      const voices = window.speechSynthesis.getVoices();
-      const idVoice = voices.find(v => v.lang.startsWith('id'));
-      if (idVoice) {
-        utterance.voice = idVoice;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
       }
-      
-      utterance.rate = 0.85; // Natural slow calm rate
-      window.speechSynthesis.speak(utterance);
+      const audio = new Audio(`/audio/rescue/${file}.mp4`);
+      audioRef.current = audio;
+      if (onEnded) {
+        audio.onended = onEnded;
+      }
+      audio.play().catch(err => {
+        console.log("Audio play blocked or interrupted:", err);
+      });
     } catch (e) {
-      console.error('TTS error:', e);
+      console.error('Audio play error:', e);
     }
   };
 
@@ -91,6 +116,8 @@ export default function Rescue() {
     "Aku hadir sepenuhnya di momen ini. Aku terlindungi."
   ];
   const [selectedAffirmation, setSelectedAffirmation] = useState('');
+  const [selectedAffirmationIndex, setSelectedAffirmationIndex] = useState(-1);
+  const isFirstAffirmation = useRef(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -99,92 +126,88 @@ export default function Rescue() {
       }
     });
     // Pick random affirmation
-    setSelectedAffirmation(affirmations[Math.floor(Math.random() * affirmations.length)]);
+    const randomIndex = Math.floor(Math.random() * affirmations.length);
+    setSelectedAffirmationIndex(randomIndex);
+    setSelectedAffirmation(affirmations[randomIndex]);
   }, []);
 
-  // Breathing Loop Controller
+  // Breathing Timer Loop (Coherent Breathing 5-0-5)
   useEffect(() => {
-    if (step !== 'breathing') {
-      if (breatheTimer.current) clearInterval(breatheTimer.current);
-      return;
-    }
+    if (step !== 'breathing') return;
 
-    setMascotState('calm');
-    setBreathePhase('inhale');
-    setBreatheSeconds(4);
-    speak("Tarik napas Anda perlahan.");
-
-    breatheTimer.current = setInterval(() => {
-      setBreatheSeconds((prevSec) => {
-        if (prevSec > 1) {
-          return prevSec - 1;
-        } else {
-          // Transition phase
-          setBreathePhase((prevPhase) => {
-            if (prevPhase === 'inhale') {
-              setBreatheSeconds(2);
-              speak("Tahan napas.");
-              return 'hold';
-            } else if (prevPhase === 'hold') {
-              setBreatheSeconds(6);
-              speak("Hembuskan perlahan.");
-              return 'exhale';
-            } else {
-              // End of round
-              setBreatheRound((prevRound) => {
-                if (prevRound >= maxRounds) {
-                  // Stop breathing session
-                  clearInterval(breatheTimer.current);
-                  setTimeout(() => setStep('grounding'), 500);
-                  return prevRound;
-                }
-                // Next round
-                setBreatheSeconds(4);
-                speak("Tarik napas kembali.");
-                return prevRound + 1;
-              });
-              return 'inhale';
-            }
-          });
-          return 0;
+    const timer = setTimeout(() => {
+      if (breatheSeconds > 1) {
+        setBreatheSeconds(breatheSeconds - 1);
+      } else {
+        // Transition phase (Inhale <-> Exhale, no Hold)
+        if (breathePhase === 'inhale') {
+          setBreathePhase('exhale');
+          setBreatheSeconds(5);
+          playAudio('hembuskan_napas');
+        } else if (breathePhase === 'exhale') {
+          if (breatheRound >= maxRounds) {
+            setStep('grounding');
+          } else {
+            setBreathePhase('inhale');
+            setBreatheSeconds(5);
+            setBreatheRound((r) => r + 1);
+            playAudio('tarik_napas_kembali');
+          }
         }
-      });
+      }
     }, 1000);
 
-    return () => {
-      if (breatheTimer.current) clearInterval(breatheTimer.current);
-    };
-  }, [step]);
+    return () => clearTimeout(timer);
+  }, [step, breatheSeconds, breathePhase, breatheRound]);
 
-  // Grounding TTS Controller
+  // Grounding Audio Controller
   useEffect(() => {
     if (step === 'grounding') {
-      const currentGrounding = groundingTexts[groundingIndex as keyof typeof groundingTexts];
       if (groundingIndex === 5) {
-        speak("Sekarang, mari lakukan teknik grounding untuk meredakan overthinking. Pertama, sebutkan " + currentGrounding.desc);
+        playAudio('grounding_intro', () => {
+          playAudio('grounding_5');
+        });
       } else {
-        speak(`Selanjutnya, sebutkan ${currentGrounding.title}. ${currentGrounding.desc}`);
+        playAudio(`grounding_${groundingIndex}`);
       }
     }
   }, [step, groundingIndex]);
 
-  // Affirmation TTS Controller
+  // Affirmation Audio Controller
   useEffect(() => {
-    if (step === 'affirmation' && selectedAffirmation) {
-      speak("Ikuti afirmasi penenang berikut, ucapkan di dalam hati Anda: " + selectedAffirmation);
+    if (step !== 'affirmation') {
+      isFirstAffirmation.current = true;
+      return;
     }
-  }, [step, selectedAffirmation]);
 
-  // Complete TTS Controller
+    if (selectedAffirmationIndex !== -1) {
+      if (isFirstAffirmation.current) {
+        isFirstAffirmation.current = false;
+        playAudio('affirmation_intro', () => {
+          playAudio(`affirmation_${selectedAffirmationIndex + 1}`);
+        });
+      } else {
+        playAudio(`affirmation_${selectedAffirmationIndex + 1}`);
+      }
+    }
+  }, [step, selectedAffirmationIndex]);
+
+  // Complete Audio Controller
   useEffect(() => {
     if (step === 'complete') {
-      speak("Luar biasa. Sesi tenang telah selesai. Jiwo bangga kamu berhasil melaluinya. Bagaimana perasaanmu sekarang?");
+      stopBgMusic();
+      playAudio('sesi_selesai');
     }
   }, [step]);
 
   const handleStart = () => {
+    setBreathePhase('inhale');
+    setBreatheSeconds(5);
+    setBreatheRound(1);
     setStep('breathing');
     setMascotState('calm');
+    playBgMusic();
+    playAudio('tarik_napas_awal');
   };
 
   const handleGroundingNext = () => {
@@ -229,19 +252,29 @@ export default function Rescue() {
             const nextMuted = !isMuted;
             setIsMuted(nextMuted);
             if (nextMuted) {
-              if (typeof window !== 'undefined' && window.speechSynthesis) {
-                window.speechSynthesis.cancel();
+              if (audioRef.current) {
+                audioRef.current.pause();
+              }
+              if (bgAudioRef.current) {
+                bgAudioRef.current.pause();
               }
             } else {
-              // Speak current step context as confirmation
+              // Play background music if session is active
+              if (step === 'breathing' || step === 'grounding' || step === 'affirmation') {
+                playBgMusic();
+              }
+              // Play current step audio as confirmation
               setTimeout(() => {
                 if (step === 'breathing') {
-                  speak(breathePhase === 'inhale' ? 'Tarik Napas' : breathePhase === 'hold' ? 'Tahan napas' : 'Hembuskan perlahan');
+                  if (breathePhase === 'inhale') {
+                    playAudio(breatheRound === 1 ? 'tarik_napas_awal' : 'tarik_napas_kembali');
+                  } else if (breathePhase === 'exhale') {
+                    playAudio('hembuskan_napas');
+                  }
                 } else if (step === 'grounding') {
-                  const currentGrounding = groundingTexts[groundingIndex as keyof typeof groundingTexts];
-                  speak(`${currentGrounding.title}. ${currentGrounding.desc}`);
-                } else if (step === 'affirmation') {
-                  speak(selectedAffirmation);
+                  playAudio(`grounding_${groundingIndex}`);
+                } else if (step === 'affirmation' && selectedAffirmationIndex !== -1) {
+                  playAudio(`affirmation_${selectedAffirmationIndex + 1}`);
                 }
               }, 100);
             }
@@ -303,16 +336,14 @@ export default function Rescue() {
             <div className="h-10 flex items-center justify-center">
               <span className="text-2xl font-black text-jiwo-primary tracking-wide uppercase transition-all duration-300">
                 {breathePhase === 'inhale' && 'Tarik Napas...'}
-                {breathePhase === 'hold' && 'Tahan...'}
                 {breathePhase === 'exhale' && 'Hembuskan...'}
               </span>
             </div>
-            <span className="text-5xl font-black text-jiwo-textDark animate-pulse">{breatheSeconds}</span>
           </div>
 
           <div className="w-full bg-jiwo-blueLight/50 p-4 rounded-2xl border border-jiwo-primaryLight/20 text-center">
             <p className="text-xs font-medium text-jiwo-textMuted leading-relaxed">
-              Ikuti detak napas Jiwo. Mascot akan membesar saat menarik napas, diam saat menahan, dan mengecil saat mengembuskan napas.
+              Ikuti detak napas Jiwo. Tarik napas saat lingkaran membesar, dan hembuskan perlahan saat lingkaran mengecil.
             </p>
           </div>
         </div>
@@ -370,7 +401,11 @@ export default function Rescue() {
 
           <div className="w-full space-y-3">
             <button
-              onClick={() => setSelectedAffirmation(affirmations[Math.floor(Math.random() * affirmations.length)])}
+              onClick={() => {
+                const randomIndex = Math.floor(Math.random() * affirmations.length);
+                setSelectedAffirmationIndex(randomIndex);
+                setSelectedAffirmation(affirmations[randomIndex]);
+              }}
               className="w-full bg-jiwo-bg hover:bg-jiwo-primaryLight/30 text-jiwo-primary font-bold py-3.5 rounded-2xl border border-jiwo-primaryLight/50 transition flex items-center justify-center gap-2"
             >
               <RefreshCw className="w-4 h-4" /> Ganti Afirmasi
