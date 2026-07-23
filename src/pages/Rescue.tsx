@@ -23,7 +23,6 @@ export default function Rescue() {
   const [breatheSeconds, setBreatheSeconds] = useState(4);
   const [breatheRound, setBreatheRound] = useState(1);
   const maxRounds = 3;
-  const breatheTimer = useRef<any>(null);
 
   // Audio Playback States & Refs
   const [isMuted, setIsMuted] = useState(false);
