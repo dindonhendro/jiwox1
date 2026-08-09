@@ -15,6 +15,7 @@ import Visualization from '@/pages/Visualization';
 import Consultation from '@/pages/Consultation';
 import Community from '@/pages/Community';
 import MoodStats from '@/pages/MoodStats';
+import HabitTracker from '@/pages/HabitTracker';
 import PaymentResult from '@/pages/PaymentResult';
 
 // The animated landing lives as a static file outside the SPA. Any /welcome
@@ -84,6 +85,7 @@ export default function App() {
             <Route path="/tools/community" element={<Community />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/tools/stats" element={<MoodStats />} />
+            <Route path="/tools/habits" element={<HabitTracker />} />
             <Route path="/tools/consultation" element={<Consultation />} />
             <Route path="/visualization" element={<Visualization />} />
           </Route>

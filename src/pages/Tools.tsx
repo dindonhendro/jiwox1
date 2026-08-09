@@ -1,10 +1,19 @@
 import { useNavigate } from 'react-router-dom';
-import { Moon, UserCheck, Wind, ChevronRight, Heart, Users, LineChart } from 'lucide-react';
+import { Moon, UserCheck, Wind, ChevronRight, Heart, Users, LineChart, Sprout } from 'lucide-react';
 
 export default function Tools() {
   const navigate = useNavigate();
 
   const toolItems = [
+    {
+      id: 'habits',
+      title: 'Kebiasaan Menenangkan',
+      subtitle: 'Habit Tracker & Streak',
+      desc: 'Rawat kebiasaan kecil tiap hari, lihat rangkaianmu tumbuh, dan temukan kebiasaan mana yang meredakan stresmu.',
+      icon: Sprout,
+      color: 'bg-jiwo-sage/12 text-jiwo-sage border-jiwo-sage/25',
+      action: () => navigate('/tools/habits')
+    },
     {
       id: 'stats',
       title: 'Peta Hati Kamu',

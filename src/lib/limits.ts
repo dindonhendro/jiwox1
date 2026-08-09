@@ -2,6 +2,8 @@
 // FREE_CHAT_LIMIT in supabase/functions/chat/index.ts.
 export const FREE_CHAT_LIMIT = 10;
 export const FREE_JOURNAL_LIMIT = 3;
+// Max simultaneously active habits on the free tier (calendar + insights stay free).
+export const FREE_HABIT_LIMIT = 3;
 
 // Launch pricing (Indonesia)
 export const PRICE_MONTHLY = 'Rp 29.000';

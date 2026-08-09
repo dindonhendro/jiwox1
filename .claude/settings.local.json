@@ -42,7 +42,14 @@
       "Bash(npx --yes supabase functions deploy ipay88-response --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
       "Bash(npx --yes supabase functions deploy ipay88-migrate --no-verify-jwt --project-ref ahnchamqeyiqhfeezlxq)",
       "Bash(npx --yes supabase functions delete ipay88-migrate --project-ref ahnchamqeyiqhfeezlxq)",
-      "Bash(node_modules/.bin/tsc.cmd -b)"
+      "Bash(node_modules/.bin/tsc.cmd -b)",
+      "Bash(node_modules/.bin/esbuild.cmd src/lib/habits.ts --format=esm --platform=node --outfile=\"C:/Users/Lenovo/AppData/Local/Temp/claude/C--Users-Lenovo-Documents-cc-jiwojun26/1af74f60-3431-4ecc-bf0e-0fbf51aeaa8c/scratchpad/habits.mjs\")",
+      "Bash(node test-habits.mjs)",
+      "Bash(curl -s \"http://localhost:5174/src/pages/HabitTracker.tsx\")",
+      "Bash(node sim-seed.mjs)",
+      "mcp__claude-in-chrome__navigate",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "Bash(xxd)"
     ]
   }
 }
