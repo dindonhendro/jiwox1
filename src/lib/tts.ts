@@ -1,19 +1,23 @@
-// Free text-to-speech via the browser's built-in Web Speech API.
-// No API key, no server, works offline with local voices. We prefer an
-// Indonesian (id-ID) voice and slow the pace down for a calming delivery.
+import { speakText, stopSpeech, isSpeaking as isGeminiSpeaking } from './gemini-tts-helper';
+
+export { speakText, stopSpeech } from './gemini-tts-helper';
+
+export function isSpeaking(): boolean {
+  const browserSpeaking = typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking;
+  return isGeminiSpeaking() || Boolean(browserSpeaking);
+}
 
 let cachedVoice: SpeechSynthesisVoice | null = null;
 let voicesReady = false;
 
 export function ttsSupported(): boolean {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window;
+  return typeof window !== 'undefined';
 }
 
 function pickIndonesianVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
-  // Preference order: Google id-ID (best quality) → any id-* voice →
-  // fall back to the default voice so TTS still works.
   return (
     voices.find((v) => v.lang.toLowerCase().startsWith('id') && /google/i.test(v.name)) ||
     voices.find((v) => v.lang.toLowerCase().startsWith('id')) ||
@@ -25,9 +29,8 @@ function pickIndonesianVoice(): SpeechSynthesisVoice | null {
 function ensureVoice(): SpeechSynthesisVoice | null {
   if (cachedVoice) return cachedVoice;
   cachedVoice = pickIndonesianVoice();
-  if (!voicesReady && ttsSupported()) {
+  if (!voicesReady && typeof window !== 'undefined' && 'speechSynthesis' in window) {
     voicesReady = true;
-    // Voice list loads asynchronously in Chrome — refresh the cache when ready
     window.speechSynthesis.addEventListener('voiceschanged', () => {
       cachedVoice = pickIndonesianVoice();
     });
@@ -35,12 +38,8 @@ function ensureVoice(): SpeechSynthesisVoice | null {
   return cachedVoice;
 }
 
-/**
- * Speak a guided-session prompt. Cancels anything currently speaking first,
- * so rapid step changes never overlap.
- */
-export function speak(text: string): void {
-  if (!ttsSupported() || !text.trim()) return;
+function fallbackWebSpeech(text: string): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
@@ -51,7 +50,6 @@ export function speak(text: string): void {
   } else {
     utterance.lang = 'id-ID';
   }
-  // Slow, soft delivery — this is a meditation guide, not a screen reader
   utterance.rate = 0.88;
   utterance.pitch = 0.95;
   utterance.volume = 1;
@@ -59,6 +57,25 @@ export function speak(text: string): void {
   window.speechSynthesis.speak(utterance);
 }
 
+/**
+ * Speak a guided-session or audio prompt.
+ * Uses Gemini TTS (gemini-2.5-flash-preview-tts) with fallback to Web Speech API.
+ */
+export function speak(text: string): void {
+  if (!text || !text.trim()) return;
+
+  // Stop any active speech first (both Gemini and browser Web Speech)
+  stopSpeaking();
+
+  speakText(text).catch((err) => {
+    console.warn('Gemini TTS error, falling back to Web Speech API:', err);
+    fallbackWebSpeech(text);
+  });
+}
+
 export function stopSpeaking(): void {
-  if (ttsSupported()) window.speechSynthesis.cancel();
+  stopSpeech();
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
 }
