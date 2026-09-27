@@ -2,7 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { setSceneMood } from '@/lib/sceneMood';
-import { speak, stopSpeaking } from '@/lib/tts';
+import { speak, stopSpeaking, preloadTts } from '@/lib/tts';
 import JiwoMascot from '@/components/JiwoMascot';
 import BreathingJiwo from '@/components/BreathingJiwo';
 import { ArrowRight, RefreshCw, Sparkles, BookOpen, Volume2, VolumeX } from 'lucide-react';
@@ -13,6 +13,13 @@ const CalmScene = lazy(() => import('@/components/three/CalmScene'));
 type RescueStep = 'intro' | 'breathing' | 'grounding' | 'affirmation' | 'complete';
 type BreathingPhase = 'inhale' | 'hold' | 'exhale';
 
+// Prompts ringkas agar sinkron dengan siklus pernapasan 5 detik
+const BREATH_PROMPTS = {
+  inhaleInitial: 'Tarik napas perlahan...',
+  exhale: 'Hembuskan perlahan...',
+  inhaleNext: 'Tarik napas kembali...',
+};
+
 export default function Rescue() {
   const navigate = useNavigate();
   const [step, setStep] = useState<RescueStep>('intro');
@@ -21,7 +28,7 @@ export default function Rescue() {
 
   // Breathing States
   const [breathePhase, setBreathePhase] = useState<BreathingPhase>('inhale');
-  const [breatheSeconds, setBreatheSeconds] = useState(4);
+  const [breatheSeconds, setBreatheSeconds] = useState(5);
   const [breatheRound, setBreatheRound] = useState(1);
   const maxRounds = 3;
 
@@ -38,8 +45,14 @@ export default function Rescue() {
     speak(text);
   };
 
-  // Clean up TTS when component unmounts
+  // Pre-load audio pernapasan begitu halaman dimuat agar bebas delay (0ms)
   useEffect(() => {
+    preloadTts([
+      BREATH_PROMPTS.inhaleInitial,
+      BREATH_PROMPTS.exhale,
+      BREATH_PROMPTS.inhaleNext,
+    ]);
+
     return () => {
       stopSpeaking();
     };
@@ -97,7 +110,7 @@ export default function Rescue() {
         if (breathePhase === 'inhale') {
           setBreathePhase('exhale');
           setBreatheSeconds(5);
-          speakPrompt('Hembuskan napas perlahan dan lepaskan semua ketegangan.');
+          speakPrompt(BREATH_PROMPTS.exhale);
         } else if (breathePhase === 'exhale') {
           if (breatheRound >= maxRounds) {
             setStep('grounding');
@@ -105,7 +118,7 @@ export default function Rescue() {
             setBreathePhase('inhale');
             setBreatheSeconds(5);
             setBreatheRound((r) => r + 1);
-            speakPrompt('Tarik napas kembali.');
+            speakPrompt(BREATH_PROMPTS.inhaleNext);
           }
         }
       }
@@ -156,7 +169,8 @@ export default function Rescue() {
     setBreatheRound(1);
     setStep('breathing');
     setMascotState('calm');
-    speakPrompt('Tarik napas dalam-dalam secara perlahan.');
+    // Langsung jalankan TTS pada gestur tombol user untuk unlock audio context browser (termasuk Vercel / Mobile)
+    speakPrompt(BREATH_PROMPTS.inhaleInitial);
   };
 
   const handleGroundingNext = () => {
@@ -179,7 +193,7 @@ export default function Rescue() {
           .insert({
             user_id: user.id,
             completed: true,
-            duration_sec: 180 // Estimated duration: breathing (~40s) + grounding (~100s) + affirmations (~40s)
+            duration_sec: 180
           });
       } catch (err) {
         console.error('Error saving rescue session:', err);
@@ -205,7 +219,7 @@ export default function Rescue() {
             } else {
               // Speak current step text as confirmation
               if (step === 'breathing') {
-                speakPrompt(breathePhase === 'inhale' ? 'Tarik napas kembali...' : 'Hembuskan napas perlahan...');
+                speakPrompt(breathePhase === 'inhale' ? BREATH_PROMPTS.inhaleNext : BREATH_PROMPTS.exhale);
               } else if (step === 'grounding') {
                 const info = groundingTexts[groundingIndex as keyof typeof groundingTexts];
                 speakPrompt(`${info.title}. ${info.desc}`);
