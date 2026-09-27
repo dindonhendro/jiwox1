@@ -1,13 +1,13 @@
 /**
  * gemini-tts-helper.js
  * Modul pengganti Web Speech API (window.speechSynthesis)
- * Menggunakan Gemini TTS (gemini-2.5-flash-preview-tts)
+ * Menggunakan Gemini TTS (gemini-3.8-flash-preview-tts / gemini-2.5-flash-preview-tts)
  */
 
 // Konfigurasi default
 export const GEMINI_CONFIG = {
     apiKey: (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.GEMINI_API_KEY)) || "", // Biarkan kosong jika dijalankan di environment yang menginjeksi key otomatis, atau isi API key Anda
-    model: "gemini-2.5-flash-preview-tts",
+    model: "gemini-3.8-flash-preview-tts",
     defaultVoice: "Sulafat", // Karakter suara wanita normal & hangat: Sulafat, Aoede, Erinome, Achird
 };
 
@@ -73,38 +73,59 @@ function base64ToArrayBuffer(base64) {
 }
 
 /**
- * Fetch dengan exponential backoff untuk keandalan panggilan jaringan
+ * Fetch dengan exponential backoff & model fallback untuk keandalan panggilan jaringan
  */
-async function fetchWithRetry(url, options, retries = 3) {
-    let delay = 1000;
-    for (let i = 0; i < retries; i++) {
-        try {
-            const res = await fetch(url, options);
-            if (res.ok) return res;
-        } catch (e) {
-            if (i === retries - 1) throw e;
+async function fetchGeminiTtsWithFallback(models, apiKey, payload, retries = 2) {
+    let lastError = null;
+
+    for (const model of models) {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        let delay = 1000;
+
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) return res;
+
+                if (res.status === 404) {
+                    console.warn(`Gemini TTS model '${model}' mengembalikan HTTP 404, beralih ke model fallback...`);
+                    break;
+                }
+
+                if (i === retries - 1) {
+                    lastError = new Error(`HTTP ${res.status}: ${await res.text()}`);
+                }
+            } catch (e) {
+                if (i === retries - 1) lastError = e instanceof Error ? e : new Error(String(e));
+            }
+            await new Promise((r) => setTimeout(r, delay));
+            delay *= 2;
         }
-        await new Promise(r => setTimeout(r, delay));
-        delay *= 2;
     }
-    throw new Error("Gagal menghubungi server Gemini TTS");
+
+    throw lastError || new Error("Gagal menghubungi server Gemini TTS");
 }
 
 /**
  * FUNGSI UTAMA: Pengganti speechSynthesis.speak()
  * @param {string} text - Teks bahasa Indonesia yang ingin dibacakan
- * @param {object} options - Opsi opsional: voice, onStart, onEnd, onError
+ * @param {object} options - Opsi opsional: voice, model, apiKey, onStart, onEnd, onError
  * @returns {Promise<HTMLAudioElement>}
  */
 export async function speakText(text, options = {}) {
     const voiceName = options.voice || GEMINI_CONFIG.defaultVoice;
     const apiKey = options.apiKey || GEMINI_CONFIG.apiKey;
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`;
+    const requestedModel = options.model || GEMINI_CONFIG.model;
 
-    // Hentikan audio yang sedang berjalan sebelumnya (mirip speechSynthesis.cancel())
+    const candidateModels = Array.from(new Set([requestedModel, "gemini-3.8-flash-preview-tts", "gemini-2.5-flash-preview-tts"]));
+
     stopSpeech();
 
-    // Instruksi vokal: suara wanita normal, bersahabat, tanpa bisikan
     const promptText = `Perintah gaya bicara: Bicaralah dengan suara wanita Indonesia yang normal, hangat, artikulasi jelas, empati, dan vokal penuh. DILARANG BERBISIK (no whispering), dilarang mendesah, dan dilarang bergumam. Naskah yang dibaca:\n\n${text}`;
 
     const payload = {
@@ -124,12 +145,7 @@ export async function speakText(text, options = {}) {
     try {
         if (options.onStart) options.onStart();
 
-        const response = await fetchWithRetry(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
+        const response = await fetchGeminiTtsWithFallback(candidateModels, apiKey, payload);
         const result = await response.json();
         const part = result?.candidates?.[0]?.content?.parts?.[0];
         const audioData = part?.inlineData?.data;

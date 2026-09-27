@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { setSceneMood } from '@/lib/sceneMood';
+import { speak, stopSpeaking } from '@/lib/tts';
 import JiwoMascot from '@/components/JiwoMascot';
 import BreathingJiwo from '@/components/BreathingJiwo';
 import { ArrowRight, RefreshCw, Sparkles, BookOpen, Volume2, VolumeX } from 'lucide-react';
@@ -24,71 +25,25 @@ export default function Rescue() {
   const [breatheRound, setBreatheRound] = useState(1);
   const maxRounds = 3;
 
-  // Audio Playback States & Refs
+  // Audio & TTS Playback States
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(isMuted);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const bgAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
-  const playBgMusic = () => {
-    if (isMutedRef.current) return;
-    try {
-      if (!bgAudioRef.current) {
-        const audio = new Audio('/audio/rescue/ambient_bg.mp4');
-        audio.loop = true;
-        audio.volume = 0.25; // Soft ambient volume level
-        bgAudioRef.current = audio;
-      }
-      bgAudioRef.current.play().catch(err => {
-        console.log("Background music play blocked or interrupted:", err);
-      });
-    } catch (e) {
-      console.error('Background music play error:', e);
-    }
+  const speakPrompt = (text: string) => {
+    if (isMutedRef.current || !text) return;
+    speak(text);
   };
 
-  const stopBgMusic = () => {
-    if (bgAudioRef.current) {
-      bgAudioRef.current.pause();
-      bgAudioRef.current.src = '';
-      bgAudioRef.current = null;
-    }
-  };
-
-  // Clean up audio when component unmounts
+  // Clean up TTS when component unmounts
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
-      stopBgMusic();
+      stopSpeaking();
     };
   }, []);
-
-  const playAudio = (file: string, onEnded?: () => void) => {
-    if (isMutedRef.current) return;
-    try {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
-      const audio = new Audio(`/audio/rescue/${file}.mp4`);
-      audioRef.current = audio;
-      if (onEnded) {
-        audio.onended = onEnded;
-      }
-      audio.play().catch(err => {
-        console.log("Audio play blocked or interrupted:", err);
-      });
-    } catch (e) {
-      console.error('Audio play error:', e);
-    }
-  };
 
   // Tint the ambient 3D scene to follow the session's emotional arc
   useEffect(() => {
@@ -100,9 +55,9 @@ export default function Rescue() {
   const [groundingIndex, setGroundingIndex] = useState(5); // Starts at 5, goes down to 1
   const groundingTexts = {
     5: { title: '5 Benda yang Dapat Dilihat', desc: 'Lihatlah sekelilingmu dan sebutkan 5 benda yang kamu lihat saat ini. Perhatikan detail warnanya.' },
-    4: { title: '4 Hal yang Dapat Disentuh', desc: 'Sentuhlah 4 benda di sekitarmu. Rasakan teksturnya (baju, meja, lantai, kulitmu sendiri).' },
-    3: { title: '3 Suara yang Dapat Didengar', desc: 'Pejamkan mata sejenak, dengarkan lingkunganmu. Sebutkan 3 suara berbeda (kipas, angin, lalu lintas).' },
-    2: { title: '2 Hal yang Dapat Dicium', desc: 'Tarik napas dalam-dalam. Sebutkan 2 aroma yang bisa kamu cium (parfum, kopi, buku, udara segar).' },
+    4: { title: '4 Hal yang Dapat Disentuh', desc: 'Sentuhlah 4 benda di sekitarmu. Rasakan teksturnya.' },
+    3: { title: '3 Suara yang Dapat Didengar', desc: 'Pejamkan mata sejenak, dengarkan lingkunganmu. Sebutkan 3 suara berbeda.' },
+    2: { title: '2 Hal yang Dapat Dicium', desc: 'Tarik napas dalam-dalam. Sebutkan 2 aroma yang bisa kamu cium.' },
     1: { title: '1 Hal yang Dapat Dirasakan', desc: 'Sebutkan 1 rasa di dalam mulutmu saat ini, atau bayangkan rasa buah segar yang manis.' }
   };
 
@@ -120,7 +75,7 @@ export default function Rescue() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+      if (session?.user) {
         setUser(session.user);
       }
     });
@@ -138,11 +93,11 @@ export default function Rescue() {
       if (breatheSeconds > 1) {
         setBreatheSeconds(breatheSeconds - 1);
       } else {
-        // Transition phase (Inhale <-> Exhale, no Hold)
+        // Transition phase (Inhale <-> Exhale)
         if (breathePhase === 'inhale') {
           setBreathePhase('exhale');
           setBreatheSeconds(5);
-          playAudio('hembuskan_napas');
+          speakPrompt('Hembuskan napas perlahan dan lepaskan semua ketegangan.');
         } else if (breathePhase === 'exhale') {
           if (breatheRound >= maxRounds) {
             setStep('grounding');
@@ -150,7 +105,7 @@ export default function Rescue() {
             setBreathePhase('inhale');
             setBreatheSeconds(5);
             setBreatheRound((r) => r + 1);
-            playAudio('tarik_napas_kembali');
+            speakPrompt('Tarik napas kembali.');
           }
         }
       }
@@ -159,43 +114,39 @@ export default function Rescue() {
     return () => clearTimeout(timer);
   }, [step, breatheSeconds, breathePhase, breatheRound]);
 
-  // Grounding Audio Controller
+  // Grounding Audio TTS Controller
   useEffect(() => {
     if (step === 'grounding') {
+      const info = groundingTexts[groundingIndex as keyof typeof groundingTexts];
       if (groundingIndex === 5) {
-        playAudio('grounding_intro', () => {
-          playAudio('grounding_5');
-        });
+        speakPrompt(`Sekarang mari kita lakukan teknik grounding 5 4 3 2 1. ${info.title}. ${info.desc}`);
       } else {
-        playAudio(`grounding_${groundingIndex}`);
+        speakPrompt(`${info.title}. ${info.desc}`);
       }
     }
   }, [step, groundingIndex]);
 
-  // Affirmation Audio Controller
+  // Affirmation Audio TTS Controller
   useEffect(() => {
     if (step !== 'affirmation') {
       isFirstAffirmation.current = true;
       return;
     }
 
-    if (selectedAffirmationIndex !== -1) {
+    if (selectedAffirmationIndex !== -1 && selectedAffirmation) {
       if (isFirstAffirmation.current) {
         isFirstAffirmation.current = false;
-        playAudio('affirmation_intro', () => {
-          playAudio(`affirmation_${selectedAffirmationIndex + 1}`);
-        });
+        speakPrompt(`Resapi dan ulangi afirmasi ini di dalam hatimu: ${selectedAffirmation}`);
       } else {
-        playAudio(`affirmation_${selectedAffirmationIndex + 1}`);
+        speakPrompt(selectedAffirmation);
       }
     }
-  }, [step, selectedAffirmationIndex]);
+  }, [step, selectedAffirmationIndex, selectedAffirmation]);
 
-  // Complete Audio Controller
+  // Complete Audio TTS Controller
   useEffect(() => {
     if (step === 'complete') {
-      stopBgMusic();
-      playAudio('sesi_selesai');
+      speakPrompt('Hebat sekali! Kamu berhasil menyelesaikan sesi pertolongan ini. Jiwo bangga padamu.');
     }
   }, [step]);
 
@@ -205,8 +156,7 @@ export default function Rescue() {
     setBreatheRound(1);
     setStep('breathing');
     setMascotState('calm');
-    playBgMusic();
-    playAudio('tarik_napas_awal');
+    speakPrompt('Tarik napas dalam-dalam secara perlahan.');
   };
 
   const handleGroundingNext = () => {
@@ -251,31 +201,17 @@ export default function Rescue() {
             const nextMuted = !isMuted;
             setIsMuted(nextMuted);
             if (nextMuted) {
-              if (audioRef.current) {
-                audioRef.current.pause();
-              }
-              if (bgAudioRef.current) {
-                bgAudioRef.current.pause();
-              }
+              stopSpeaking();
             } else {
-              // Play background music if session is active
-              if (step === 'breathing' || step === 'grounding' || step === 'affirmation') {
-                playBgMusic();
+              // Speak current step text as confirmation
+              if (step === 'breathing') {
+                speakPrompt(breathePhase === 'inhale' ? 'Tarik napas kembali...' : 'Hembuskan napas perlahan...');
+              } else if (step === 'grounding') {
+                const info = groundingTexts[groundingIndex as keyof typeof groundingTexts];
+                speakPrompt(`${info.title}. ${info.desc}`);
+              } else if (step === 'affirmation' && selectedAffirmation) {
+                speakPrompt(selectedAffirmation);
               }
-              // Play current step audio as confirmation
-              setTimeout(() => {
-                if (step === 'breathing') {
-                  if (breathePhase === 'inhale') {
-                    playAudio(breatheRound === 1 ? 'tarik_napas_awal' : 'tarik_napas_kembali');
-                  } else if (breathePhase === 'exhale') {
-                    playAudio('hembuskan_napas');
-                  }
-                } else if (step === 'grounding') {
-                  playAudio(`grounding_${groundingIndex}`);
-                } else if (step === 'affirmation' && selectedAffirmationIndex !== -1) {
-                  playAudio(`affirmation_${selectedAffirmationIndex + 1}`);
-                }
-              }, 100);
             }
           }}
           className="p-2.5 rounded-full bg-white/80 backdrop-blur-xs border border-jiwo-primaryLight/35 text-jiwo-primary hover:bg-white transition shadow-3xs"
@@ -298,11 +234,11 @@ export default function Rescue() {
             </p>
           </div>
 
-          <div className="relative">
-            <JiwoMascot state={mascotState} scale={1} />
+          <div className="relative my-2">
+            <JiwoMascot state={mascotState} scale={1.05} />
           </div>
 
-          <div className="w-full space-y-4">
+          <div className="w-full space-y-3">
             <button
               onClick={handleStart}
               className="w-full bg-jiwo-primary hover:bg-jiwo-primary/95 text-white font-bold py-4 rounded-2xl shadow transition"
