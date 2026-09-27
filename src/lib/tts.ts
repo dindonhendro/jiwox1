@@ -1,4 +1,4 @@
-import { speakText, stopSpeech, isSpeaking as isGeminiSpeaking, preloadTts } from './gemini-tts-helper';
+import { speakText, stopSpeech, isSpeaking as isGeminiSpeaking } from './gemini-tts-helper';
 
 export { speakText, stopSpeech, preloadTts } from './gemini-tts-helper';
 
