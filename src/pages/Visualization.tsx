@@ -4,10 +4,28 @@ import { setSceneMood } from '@/lib/sceneMood';
 import { speak, stopSpeaking, ttsSupported, preloadTts } from '@/lib/tts';
 import JiwoMascot from '@/components/JiwoMascot';
 import JiwoFilm from '@/components/JiwoFilm';
-import SafePlaceScene from '@/components/SafePlaceScene';
+import SafePlaceScene, { type SafePlaceTheme } from '@/components/SafePlaceScene';
 import SessionCard from '@/components/SessionCard';
 import { GUIDED_SESSIONS, type GuidedSession } from '@/data/guidedSessions';
-import { Eye, Wind, ChevronRight, Compass, Send, Volume2, VolumeX } from 'lucide-react';
+import { Eye, Wind, ChevronRight, Compass, Send, Volume2, VolumeX, Sparkles, Waves } from 'lucide-react';
+import {
+  createSoundscapeBuffers,
+  createSubEngineTracker,
+  clearSubEngine,
+  setupRainEngine,
+  setupWaveEngine,
+  setupCommunityEngine,
+  setupBowlEngine,
+  type SoundscapeBuffers,
+  type SubEngineTracker,
+} from '@/lib/nusantaraSoundscape';
+
+interface PlaceOption {
+  title: string;
+  theme: SafePlaceTheme;
+  desc: string;
+  prompts: string[];
+}
 
 export default function Visualization() {
   const [activeMode, setActiveMode] = useState<'safe_place' | 'release'>('safe_place');
@@ -16,31 +34,45 @@ export default function Visualization() {
   const promptCardRef = useRef<HTMLDivElement>(null);
   const releaseMascotRef = useRef<HTMLDivElement>(null);
 
-  const places = [
+  // --- VISUALISASI TERPANDU NUSANTARA (SAFE PLACE RE-IMAGINED) ---
+  const places: PlaceOption[] = [
     {
-      title: 'Pantai',
-      theme: 'beach' as const,
-      desc: 'Bayangkan pasir putih hangat di bawah telapak kakimu, deburan ombak berirama teratur, dan matahari pagi menyinari pundakmu.',
+      title: 'Lembayung Senja Pantai Selatan',
+      theme: 'pantai_selatan',
+      desc: 'Deburan ombak megah Samudra Hindia, embun kabut laut lembut, dan langit senja lembayung keemasan yang melapangkan dada.',
       prompts: [
-        'Duduklah dengan santai dan tutup matamu perlahan...',
-        'Bayangkan kamu berdiri di tepi pantai saat matahari terbit. Langit berwarna jingga lembut dan merah muda.',
-        'Rasakan kehangatan pasir laut di telapak kakimu. Pasir itu menopang langkahmu dengan aman.',
-        'Dengarkan suara ombak. Tarik napas saat ombak mendekat... Hembuskan saat ombak surut...',
-        'Rasakan embusan angin laut yang menyapu pipimu secara lembut, membawa pergi sisa kecemasanmu.',
-        'Kamu berada di tempat yang aman. Tarik napas dalam-dalam, rasakan kedamaian mengalir ke seluruh tubuhmu.'
+        'Duduklah dengan nyaman. Pejamkan matamu perlahan, dan biarkan seluruh tubuhmu rileks...',
+        'Bayangkan kamu sedang berdiri di tepian Pantai Selatan saat matahari mulai terbenam. Langit di hadapanmu terbentang luas bergradasi jingga, merah muda, dan lembayung ungu yang hangat.',
+        'Telapak kakimu menyentuh pasir pantai basah yang padat dan hangat. Udara laut bertiup lapang membawa aroma garam dan kebebasan.',
+        'Dengarkan deburan ombak Samudra Hindia yang megah dan berirama teratur. Tarik napas perlahan saat ombak mendekat ke tepian... Hembuskan panjang saat buih putihnya surut kembali ke lautan luas...',
+        'Setiap kali ombak surut, bayangkan ia membasuh dan membawa pergi sisa ketegangan, beban pikiran, dan rasa lelah yang menumpuk di pundakmu.',
+        'Kamu aman di hadapan samudra yang luas ini. Jiwamu lapang, tenang, dan kembali menemukan kekuatannya.'
       ]
     },
     {
-      title: 'Hutan',
-      theme: 'forest' as const,
-      desc: 'Bayangkan aroma tanah basah segar setelah hujan, gemercik air sungai kecil, dan rindang daun hijau membentengi pikiranmu.',
+      title: 'Duduk di Teras Rumah Nenek',
+      theme: 'teras_nenek',
+      desc: 'Aroma tanah basah setelah disiram air, secangkir teh melati hangat, semilir angin sore, dan rasa aman tanpa tuntutan dunia luar.',
       prompts: [
-        'Duduklah tegak namun santai, biarkan otot-otot tubuhmu lemas...',
-        'Bayangkan kamu sedang berjalan di setapak teduh di tengah hutan yang rindang. Udara terasa sangat sejuk dan segar.',
-        'Hirup aroma petrichor (tanah basah setelah hujan) yang menenangkan. Tarik napas dalam... hembuskan...',
-        'Dengarkan suara gemercik air sungai jernih di dekatmu dan kicauan burung yang saling bersahutan secara alami.',
-        'Lihatlah pohon-pohon raksasa berdaun hijau lebat di sekelilingmu. Mereka ada di sini untuk melindungimu.',
-        'Rasakan kekuatan dan ketenangan alam menyerap ke dalam jiwamu. Kamu rileks, aman, dan memegang kendali.'
+        'Tarik napas dalam-dalam, lalu hembuskan perlahan. Lepaskan semua target dan ekspektasi yang membebani kepalamu...',
+        'Bayangkan kamu sedang duduk santai di kursi rotan di teras rumah nenek saat sore hari yang teduh.',
+        'Halaman tanah baru saja disiram air sejuk. Hirup aroma petrichor tanah basah bercampur harum bunga melati yang sangat menenangkan.',
+        'Di mejamu ada secangkir teh melati hangat. Rasakan kehangatan cangkir itu di telapak tanganmu saat kamu menyeruputnya pelan-pelan...',
+        'Dengarkan semilir angin sore menggoyangkan dedaunan pohon mangga. Di tempat ini, kamu tidak perlu terburu-buru. Kamu tidak perlu membuktikan apa pun kepada siapa pun.',
+        'Kamu diterima seutuhnya. Kamu pulang ke ruang amanmu yang paling tulus dan penuh kasih.'
+      ]
+    },
+    {
+      title: 'Bonceng Motor Keliling Kota Malam',
+      theme: 'bonceng_motor',
+      desc: 'Angin malam sejuk menerpa jaket, lampu jalanan kuning keemasan berbaris temaram, dan kota yang perlahan tertidur melarutkan overthinking.',
+      prompts: [
+        'Sandarkan punggungmu, lemaskan bahu dan lehermu. Tarik napas sejuk perlahan...',
+        'Bayangkan kamu sedang dibonceng motor dengan kecepatan santai menembus jalanan kota yang lengang di malam hari.',
+        'Angin malam yang segar menerpa lembut wajah dan jaketmu, mendinginkan pikiran yang seharian tadi terlalu bising dan penuh.',
+        'Lihatlah deretan lampu jalanan berwarna kuning keemasan yang tenang. Lampu-lampu itu meluncur perlahan ke belakang seperti jejak waktu yang telah berlalu.',
+        'Setiap meter jalan yang kamu lewati, bayangkan pikiran-pikiran overthinking tertinggal di belakang dan larut dalam heningnya malam kota.',
+        'Napasmu kini terasa ringan dan ritmis. Kamu bergerak maju dengan damai, menyerahkan sisa malam ini untuk beristirahat.'
       ]
     }
   ];
@@ -51,7 +83,7 @@ export default function Visualization() {
     return () => setSceneMood('idle');
   }, [mascotState]);
 
-  // Pre-load seluruh prompt Safe Place & Guided Sessions saat halaman dimuat (0ms Latency)
+  // Pre-load seluruh prompt Safe Place Nusantara saat halaman dimuat (0ms Latency)
   useEffect(() => {
     const allSafePrompts = places.flatMap((p) => p.prompts);
     preloadTts(allSafePrompts);
@@ -103,8 +135,126 @@ export default function Visualization() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlace, guideStep, ttsOn]);
 
-  // Never keep talking after the user leaves the page
-  useEffect(() => () => stopSpeaking(), []);
+  // --- SOUNDSCAPE AMBIENT AUDIO ENGINE (Nusantara Procedural Audio) ---
+  const [soundscapeOn, setSoundscapeOn] = useState(() => localStorage.getItem('jiwo_safe_soundscape') !== 'off');
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const buffersRef = useRef<SoundscapeBuffers | null>(null);
+  const rainTrackerRef = useRef<SubEngineTracker>(createSubEngineTracker());
+  const waveTrackerRef = useRef<SubEngineTracker>(createSubEngineTracker());
+  const commTrackerRef = useRef<SubEngineTracker>(createSubEngineTracker());
+  const bowlTrackerRef = useRef<SubEngineTracker>(createSubEngineTracker());
+
+  const toggleSoundscape = () => {
+    setSoundscapeOn((prev) => {
+      const next = !prev;
+      localStorage.setItem('jiwo_safe_soundscape', next ? 'on' : 'off');
+      return next;
+    });
+  };
+
+  const getSafePlaceSoundscapeLabel = (theme: SafePlaceTheme) => {
+    if (theme === 'pantai_selatan' || theme === 'beach') return 'Deburan Ombak Parangtritis';
+    if (theme === 'teras_nenek') return 'Semilir Angin & Teras Sore';
+    if (theme === 'bonceng_motor') return 'Deru Motor Santai & Angin Malam';
+    return 'Resonansi Penenang';
+  };
+
+  const stopSoundscapeAudio = () => {
+    clearSubEngine(rainTrackerRef.current);
+    clearSubEngine(waveTrackerRef.current);
+    clearSubEngine(commTrackerRef.current);
+    clearSubEngine(bowlTrackerRef.current);
+    if (audioCtxRef.current) {
+      try {
+        audioCtxRef.current.close();
+      } catch (e) {}
+      audioCtxRef.current = null;
+    }
+    buffersRef.current = null;
+  };
+
+  const startSoundscapeAudio = (theme: SafePlaceTheme) => {
+    stopSoundscapeAudio();
+
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AudioContextClass();
+    audioCtxRef.current = ctx;
+
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -12;
+    comp.knee.value = 10;
+    comp.ratio.value = 3.5;
+    comp.connect(ctx.destination);
+
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.35; // Gentle background level behind Gemini TTS narration
+    masterGain.connect(comp);
+
+    const buffers = createSoundscapeBuffers(ctx);
+    buffers.reverb.connect(masterGain);
+    buffersRef.current = buffers;
+
+    if (theme === 'pantai_selatan' || theme === 'beach') {
+      const waveGain = ctx.createGain();
+      waveGain.gain.value = 0.55;
+      waveGain.connect(masterGain);
+
+      const bowlGain = ctx.createGain();
+      bowlGain.gain.value = 0.18;
+      bowlGain.connect(masterGain);
+
+      setupWaveEngine(ctx, 'parangtritis', waveGain, buffers, waveTrackerRef.current);
+      setupBowlEngine(ctx, 'slendro', bowlGain, buffers, bowlTrackerRef.current);
+    } else if (theme === 'teras_nenek') {
+      const commGain = ctx.createGain();
+      commGain.gain.value = 0.45;
+      commGain.connect(masterGain);
+
+      const rainGain = ctx.createGain();
+      rainGain.gain.value = 0.28;
+      rainGain.connect(masterGain);
+
+      setupCommunityEngine(ctx, 'teras_malam', commGain, buffers, commTrackerRef.current);
+      setupRainEngine(ctx, 'sawah_ubud', rainGain, buffers, rainTrackerRef.current);
+    } else if (theme === 'bonceng_motor') {
+      const commGain = ctx.createGain();
+      commGain.gain.value = 0.48;
+      commGain.connect(masterGain);
+
+      const rainGain = ctx.createGain();
+      rainGain.gain.value = 0.22;
+      rainGain.connect(masterGain);
+
+      setupCommunityEngine(ctx, 'motor_jauh', commGain, buffers, commTrackerRef.current);
+      setupRainEngine(ctx, 'jakarta_malam', rainGain, buffers, rainTrackerRef.current);
+    } else {
+      const bowlGain = ctx.createGain();
+      bowlGain.gain.value = 0.35;
+      bowlGain.connect(masterGain);
+      setupBowlEngine(ctx, 'slendro', bowlGain, buffers, bowlTrackerRef.current);
+    }
+  };
+
+  // Trigger Soundscape when Safe Place session is active
+  useEffect(() => {
+    if (selectedPlace !== null && soundscapeOn) {
+      startSoundscapeAudio(places[selectedPlace].theme);
+    } else {
+      stopSoundscapeAudio();
+    }
+
+    return () => {
+      stopSoundscapeAudio();
+    };
+  }, [selectedPlace, soundscapeOn]);
+
+  // Never keep talking or playing sound after the user leaves the page
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      stopSoundscapeAudio();
+    };
+  }, []);
 
   const openSession = (s: GuidedSession) => {
     stopSpeaking();
@@ -163,7 +313,6 @@ export default function Visualization() {
       .to(el, { scale: 0.95, y: 0, rotation: 7, x: 12, duration: 1.6, ease: 'power2.out' }) // blow!
       .to(el, { scale: 1, rotation: 0, x: 0, duration: 1.6, ease: 'elastic.out(1, 0.5)' });
 
-    // Wind puffs streaming from Jiwo toward the worry cloud
     const puffTimer = setInterval(() => {
       const puff = document.createElement('span');
       puff.innerText = '💨';
@@ -202,7 +351,6 @@ export default function Visualization() {
     setIsBlowing(true);
     setMascotState('calm');
 
-    // Speak comforting text while blowing anxiety away
     if (ttsOn) {
       speak('Tarik napas panjang... dan mari kita hembuskan pikiran ini bersama-sama hingga sirnah.');
     }
@@ -230,12 +378,12 @@ export default function Visualization() {
       <div className="flex justify-between items-center w-full z-10 shrink-0">
         <div className="flex items-center gap-2">
 
-          {/* Free browser-native TTS: Jiwo reads every guided prompt aloud */}
+          {/* Gemini TTS Speaker Toggle */}
           {ttsSupported() && (
             <button
               onClick={toggleTts}
-              aria-label={ttsOn ? 'Matikan suara panduan' : 'Nyalakan suara panduan'}
-              title={ttsOn ? 'Suara panduan: nyala' : 'Suara panduan: mati'}
+              aria-label={ttsOn ? 'Matikan suara panduan narasi' : 'Nyalakan suara panduan narasi'}
+              title={ttsOn ? 'Narasi suara: nyala' : 'Narasi suara: mati'}
               className={`p-2.5 rounded-full border transition ${
                 ttsOn
                   ? 'bg-jiwo-primary border-jiwo-primary text-white shadow-sm'
@@ -245,6 +393,20 @@ export default function Visualization() {
               {ttsOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </button>
           )}
+
+          {/* Soundscape Ambient Audio Toggle */}
+          <button
+            onClick={toggleSoundscape}
+            aria-label={soundscapeOn ? 'Matikan suara latar alam' : 'Nyalakan suara latar alam'}
+            title={soundscapeOn ? 'Suara latar alam: nyala' : 'Suara latar alam: mati'}
+            className={`p-2.5 rounded-full border transition ${
+              soundscapeOn
+                ? 'bg-jiwo-blueCalm border-jiwo-blueCalm text-white shadow-sm'
+                : 'bg-white border-jiwo-primaryLight/35 text-jiwo-textMuted hover:text-jiwo-blueCalm'
+            }`}
+          >
+            <Waves className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="flex bg-white/70 p-1.5 rounded-2xl border border-jiwo-primaryLight/30 gap-1">
@@ -281,7 +443,7 @@ export default function Visualization() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-grow flex flex-col items-center justify-center py-6 w-full max-w-md mx-auto relative z-10">
+      <div className="flex-grow flex flex-col items-center justify-center py-4 w-full max-w-md mx-auto relative z-10">
 
         {activeSession ? (
           // --- GUIDED SESSION PLAYER (from the session cards) ---
@@ -345,41 +507,58 @@ export default function Visualization() {
           // --- SAFE PLACE CONTENT ---
           selectedPlace === null ? (
             <div className="space-y-5 w-full animate-fade-in">
-              {/* Cinematic auto-playing Jiwo film — watch him drift through empat emosi */}
-              <JiwoFilm />
 
-              <div className="text-center space-y-1.5 mb-2">
+              {/* Header Ruang Aman Nusantara — ditempatkan paling atas agar langsung terlihat */}
+              <div className="text-center space-y-1 mb-2">
+                <div className="inline-flex items-center gap-1.5 bg-jiwo-primary/10 text-jiwo-primary px-3 py-1 rounded-full text-3xs font-extrabold uppercase tracking-wider mb-1">
+                  <Sparkles className="w-3 h-3" /> Nuansa Otentik Nusantara
+                </div>
                 <h2 className="text-xl font-extrabold text-jiwo-textDark font-sans">
-                  Pilih Tempat Tenangmu
+                  Pilih Ruang Aman Nusantaramu
                 </h2>
                 <p className="text-xs text-jiwo-textMuted max-w-xs mx-auto">
                   Imajinasikan pikiranmu berkelana ke sudut Nusantara yang damai untuk merilekskan sistem saraf tegang.
                 </p>
               </div>
 
-              {places.map((place, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    stopSpeaking();
-                    setSelectedPlace(idx);
-                    setGuideStep(0);
-                    setMascotState('calm');
-                  }}
-                  className="w-full text-left bg-white border border-jiwo-primaryLight/20 hover:border-jiwo-primary/30 p-5 rounded-3xl transition duration-150 shadow-3xs flex justify-between items-center group"
-                >
-                  <div className="space-y-1 pr-4">
-                    <h3 className="font-extrabold text-sm text-jiwo-textDark">{place.title}</h3>
-                    <p className="text-2xs text-jiwo-textMuted leading-relaxed">{place.desc}</p>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-jiwo-bg text-jiwo-textMuted group-hover:text-jiwo-primary flex items-center justify-center shrink-0 transition">
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
-                </button>
-              ))}
+              {/* 3 Kartu Ruang Aman Nusantara */}
+              <div className="space-y-3">
+                {places.map((place, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      stopSpeaking();
+                      setSelectedPlace(idx);
+                      setGuideStep(0);
+                      setMascotState('calm');
+                    }}
+                    className="w-full text-left bg-white border border-jiwo-primaryLight/25 hover:border-jiwo-primary/50 p-4.5 rounded-3xl transition duration-150 shadow-3xs hover:shadow-2xs flex justify-between items-center group"
+                  >
+                    <div className="space-y-1 pr-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">
+                          {place.theme === 'pantai_selatan' ? '🌅' : place.theme === 'teras_nenek' ? '🏡' : '🛵'}
+                        </span>
+                        <h3 className="font-extrabold text-sm text-jiwo-textDark group-hover:text-jiwo-primary transition">
+                          {place.title}
+                        </h3>
+                      </div>
+                      <p className="text-2xs text-jiwo-textMuted leading-relaxed">{place.desc}</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-jiwo-bg text-jiwo-textMuted group-hover:text-jiwo-primary group-hover:bg-jiwo-primaryLight/30 flex items-center justify-center shrink-0 transition">
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </button>
+                ))}
+              </div>
 
-              {/* Guided session library — animated cards, Jiwo in every one */}
-              <div className="pt-4 space-y-3">
+              {/* Cinematic auto-playing Jiwo film */}
+              <div className="pt-2">
+                <JiwoFilm />
+              </div>
+
+              {/* Guided session library */}
+              <div className="pt-2 space-y-3">
                 <div className="text-center space-y-1">
                   <h3 className="text-sm font-extrabold text-jiwo-textDark font-sans">
                     Sesi Terpandu Bersama Jiwo
@@ -398,11 +577,29 @@ export default function Visualization() {
           ) : (
             // Active Safe Place Guided Session
             <div className="w-full text-center space-y-6 animate-fade-in flex flex-col items-center">
-              <h2 className="text-xs font-extrabold uppercase tracking-widest text-jiwo-primary">
-                {places[selectedPlace].title}
-              </h2>
+              <div className="space-y-1">
+                <span className="text-3xs font-extrabold uppercase tracking-widest text-jiwo-primary bg-jiwo-primaryLight/40 px-3 py-1 rounded-full">
+                  Langkah {guideStep + 1} dari {places[selectedPlace].prompts.length}
+                </span>
+                <h2 className="text-base font-extrabold text-jiwo-textDark font-sans mt-2">
+                  {places[selectedPlace].title}
+                </h2>
+              </div>
 
-              {/* Animated diorama: Jiwo at the beach / in the forest */}
+              {/* Soundscape Ambiance Active Indicator */}
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/75 backdrop-blur border border-jiwo-primaryLight/35 text-3xs font-bold text-jiwo-textDark shadow-3xs select-none">
+                <span className={`w-2 h-2 rounded-full ${soundscapeOn ? 'bg-jiwo-primary animate-pulse' : 'bg-slate-300'}`} />
+                <span>{soundscapeOn ? `Suara Latar: ${getSafePlaceSoundscapeLabel(places[selectedPlace].theme)}` : 'Suara Latar Dimatikan'}</span>
+                <button
+                  onClick={toggleSoundscape}
+                  title={soundscapeOn ? 'Matikan suara latar alam' : 'Nyalakan suara latar alam'}
+                  className="ml-1 p-0.5 rounded text-jiwo-textMuted hover:text-jiwo-primary transition"
+                >
+                  {soundscapeOn ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {/* Animated diorama: Pantai Selatan / Teras Nenek / Bonceng Motor */}
               <div ref={guideMascotRef} className="w-full flex justify-center select-none">
                 <SafePlaceScene theme={places[selectedPlace].theme} />
               </div>

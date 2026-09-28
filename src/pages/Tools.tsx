@@ -25,9 +25,9 @@ export default function Tools() {
     },
     {
       id: 'sleep',
-      title: 'Tidur Nyenyak',
-      subtitle: 'Sleep Companion & Wind-down',
-      desc: 'Sesi relaksasi otot (Yoga Nidra) dan pemutar suara alam menenangkan untuk membantu tidur pulap.',
+      title: 'Soundscape Nusantara',
+      subtitle: 'Suara Alam & Sleep Companion',
+      desc: 'Pemutar suara alam Indonesia (Hujan Atap Seng Kos, Ombak Parangtritis, Suara Gang Malam) & relaksasi tidur pulap.',
       icon: Moon,
       color: 'bg-jiwo-blueCalm/10 text-jiwo-blueCalm border-jiwo-blueCalm/20',
       action: () => navigate('/tools/sleep')
