@@ -13,12 +13,33 @@ const CalmScene = lazy(() => import('@/components/three/CalmScene'));
 type RescueStep = 'intro' | 'breathing' | 'grounding' | 'affirmation' | 'complete';
 type BreathingPhase = 'inhale' | 'hold' | 'exhale';
 
-// Prompts ringkas agar sinkron dengan siklus pernapasan 5 detik
+// Prompts ringkas pernapasan
 const BREATH_PROMPTS = {
   inhaleInitial: 'Tarik napas perlahan...',
   exhale: 'Hembuskan perlahan...',
   inhaleNext: 'Tarik napas kembali...',
 };
+
+// Prompts grounding 5-4-3-2-1
+const GROUNDING_PROMPTS: Record<number, string> = {
+  5: 'Sekarang mari kita lakukan teknik grounding 5 4 3 2 1. 5 Benda yang Dapat Dilihat. Lihatlah sekelilingmu dan sebutkan 5 benda yang kamu lihat saat ini. Perhatikan detail warnanya.',
+  4: '4 Hal yang Dapat Disentuh. Sentuhlah 4 benda di sekitarmu. Rasakan teksturnya.',
+  3: '3 Suara yang Dapat Didengar. Pejamkan mata sejenak, dengarkan lingkunganmu. Sebutkan 3 suara berbeda.',
+  2: '2 Hal yang Dapat Dicium. Tarik napas dalam-dalam. Sebutkan 2 aroma yang bisa kamu cium.',
+  1: '1 Hal yang Dapat Dirasakan. Sebutkan 1 rasa di dalam mulutmu saat ini, atau bayangkan rasa buah segar yang manis.',
+};
+
+// Daftar Afirmasi Penenang
+const AFFIRMATIONS = [
+  "Semua kecemasan ini adalah ombak yang akan berlalu. Aku aman di sini.",
+  "Aku sedang bernapas dengan tenang. Detak jantungku melambat secara alami.",
+  "Aku tidak didefinisikan oleh pikiran cemasku. Aku kuat dan mampu menghadapinya.",
+  "Tubuhku rileks, pikiranku tenang, dan segalanya akan baik-baik saja.",
+  "Aku hadir sepenuhnya di momen ini. Aku terlindungi."
+];
+
+// Prompt Selesai
+const COMPLETE_PROMPT = 'Hebat sekali! Kamu berhasil menyelesaikan sesi pertolongan ini. Jiwo bangga padamu.';
 
 export default function Rescue() {
   const navigate = useNavigate();
@@ -45,12 +66,20 @@ export default function Rescue() {
     speak(text);
   };
 
-  // Pre-load audio pernapasan begitu halaman dimuat agar bebas delay (0ms)
+  // Pre-load seluruh audio (Pernapasan, Grounding, Afirmasi, dan Completion) di awal agar 100% bebas delay (0ms)
   useEffect(() => {
     preloadTts([
+      // 1. Pernapasan
       BREATH_PROMPTS.inhaleInitial,
       BREATH_PROMPTS.exhale,
       BREATH_PROMPTS.inhaleNext,
+      // 2. Grounding 5-4-3-2-1
+      ...Object.values(GROUNDING_PROMPTS),
+      // 3. Afirmasi Penenang
+      ...AFFIRMATIONS.map((aff) => `Resapi dan ulangi afirmasi ini di dalam hatimu: ${aff}`),
+      ...AFFIRMATIONS,
+      // 4. Completion
+      COMPLETE_PROMPT,
     ]);
 
     return () => {
@@ -75,13 +104,6 @@ export default function Rescue() {
   };
 
   // Affirmation States
-  const affirmations = [
-    "Semua kecemasan ini adalah ombak yang akan berlalu. Aku aman di sini.",
-    "Aku sedang bernapas dengan tenang. Detak jantungku melambat secara alami.",
-    "Aku tidak didefinisikan oleh pikiran cemasku. Aku kuat dan mampu menghadapinya.",
-    "Tubuhku rileks, pikiranku tenang, dan segalanya akan baik-baik saja.",
-    "Aku hadir sepenuhnya di momen ini. Aku terlindungi."
-  ];
   const [selectedAffirmation, setSelectedAffirmation] = useState('');
   const [selectedAffirmationIndex, setSelectedAffirmationIndex] = useState(-1);
   const isFirstAffirmation = useRef(true);
@@ -93,9 +115,9 @@ export default function Rescue() {
       }
     });
     // Pick random affirmation
-    const randomIndex = Math.floor(Math.random() * affirmations.length);
+    const randomIndex = Math.floor(Math.random() * AFFIRMATIONS.length);
     setSelectedAffirmationIndex(randomIndex);
-    setSelectedAffirmation(affirmations[randomIndex]);
+    setSelectedAffirmation(AFFIRMATIONS[randomIndex]);
   }, []);
 
   // Breathing Timer Loop (Coherent Breathing 5-0-5)
@@ -130,11 +152,9 @@ export default function Rescue() {
   // Grounding Audio TTS Controller
   useEffect(() => {
     if (step === 'grounding') {
-      const info = groundingTexts[groundingIndex as keyof typeof groundingTexts];
-      if (groundingIndex === 5) {
-        speakPrompt(`Sekarang mari kita lakukan teknik grounding 5 4 3 2 1. ${info.title}. ${info.desc}`);
-      } else {
-        speakPrompt(`${info.title}. ${info.desc}`);
+      const prompt = GROUNDING_PROMPTS[groundingIndex];
+      if (prompt) {
+        speakPrompt(prompt);
       }
     }
   }, [step, groundingIndex]);
@@ -159,7 +179,7 @@ export default function Rescue() {
   // Complete Audio TTS Controller
   useEffect(() => {
     if (step === 'complete') {
-      speakPrompt('Hebat sekali! Kamu berhasil menyelesaikan sesi pertolongan ini. Jiwo bangga padamu.');
+      speakPrompt(COMPLETE_PROMPT);
     }
   }, [step]);
 
@@ -169,7 +189,6 @@ export default function Rescue() {
     setBreatheRound(1);
     setStep('breathing');
     setMascotState('calm');
-    // Langsung jalankan TTS pada gestur tombol user untuk unlock audio context browser (termasuk Vercel / Mobile)
     speakPrompt(BREATH_PROMPTS.inhaleInitial);
   };
 
@@ -221,8 +240,8 @@ export default function Rescue() {
               if (step === 'breathing') {
                 speakPrompt(breathePhase === 'inhale' ? BREATH_PROMPTS.inhaleNext : BREATH_PROMPTS.exhale);
               } else if (step === 'grounding') {
-                const info = groundingTexts[groundingIndex as keyof typeof groundingTexts];
-                speakPrompt(`${info.title}. ${info.desc}`);
+                const prompt = GROUNDING_PROMPTS[groundingIndex];
+                if (prompt) speakPrompt(prompt);
               } else if (step === 'affirmation' && selectedAffirmation) {
                 speakPrompt(selectedAffirmation);
               }
@@ -351,9 +370,9 @@ export default function Rescue() {
           <div className="w-full space-y-3">
             <button
               onClick={() => {
-                const randomIndex = Math.floor(Math.random() * affirmations.length);
+                const randomIndex = Math.floor(Math.random() * AFFIRMATIONS.length);
                 setSelectedAffirmationIndex(randomIndex);
-                setSelectedAffirmation(affirmations[randomIndex]);
+                setSelectedAffirmation(AFFIRMATIONS[randomIndex]);
               }}
               className="w-full bg-jiwo-bg hover:bg-jiwo-primaryLight/30 text-jiwo-primary font-bold py-3.5 rounded-2xl border border-jiwo-primaryLight/50 transition flex items-center justify-center gap-2"
             >

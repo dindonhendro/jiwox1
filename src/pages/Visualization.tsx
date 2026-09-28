@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { setSceneMood } from '@/lib/sceneMood';
-import { speak, stopSpeaking, ttsSupported } from '@/lib/tts';
+import { speak, stopSpeaking, ttsSupported, preloadTts } from '@/lib/tts';
 import JiwoMascot from '@/components/JiwoMascot';
 import JiwoFilm from '@/components/JiwoFilm';
 import SafePlaceScene from '@/components/SafePlaceScene';
@@ -15,90 +15,6 @@ export default function Visualization() {
   const guideMascotRef = useRef<HTMLDivElement>(null);
   const promptCardRef = useRef<HTMLDivElement>(null);
   const releaseMascotRef = useRef<HTMLDivElement>(null);
-
-  // The ambient 3D scene follows the mascot's emotional state
-  useEffect(() => {
-    setSceneMood(mascotState === 'happy' ? 'happy' : mascotState === 'calm' ? 'calm' : 'idle');
-    return () => setSceneMood('idle');
-  }, [mascotState]);
-
-  // --- SAFE PLACE STATE ---
-  const [selectedPlace, setSelectedPlace] = useState<number | null>(null);
-  const [guideStep, setGuideStep] = useState(0);
-
-  // --- GUIDED SESSION CARDS ---
-  const [activeSession, setActiveSession] = useState<GuidedSession | null>(null);
-  const [sessionStep, setSessionStep] = useState(0);
-
-  // --- TEXT-TO-SPEECH (free, browser-native Web Speech API) ---
-  const [ttsOn, setTtsOn] = useState(() => localStorage.getItem('jiwo_tts') !== 'off');
-
-  const toggleTts = () => {
-    setTtsOn((prev) => {
-      const next = !prev;
-      localStorage.setItem('jiwo_tts', next ? 'on' : 'off');
-      if (!next) stopSpeaking();
-      return next;
-    });
-  };
-
-  // Voice the current guided-session prompt whenever the step changes
-  useEffect(() => {
-    if (!activeSession || !ttsOn) return;
-    speak(activeSession.prompts[sessionStep]);
-    return () => stopSpeaking();
-  }, [activeSession, sessionStep, ttsOn]);
-
-  // Voice the Safe Place prompts too
-  useEffect(() => {
-    if (selectedPlace === null || !ttsOn) return;
-    speak(places[selectedPlace].prompts[guideStep]);
-    return () => stopSpeaking();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlace, guideStep, ttsOn]);
-
-  // Never keep talking after the user leaves the page
-  useEffect(() => () => stopSpeaking(), []);
-
-  const openSession = (s: GuidedSession) => {
-    setActiveSession(s);
-    setSessionStep(0);
-    setMascotState(s.mascot as typeof mascotState);
-  };
-
-  const closeSession = (finished: boolean) => {
-    setActiveSession(null);
-    setSessionStep(0);
-    setMascotState(finished ? 'happy' : 'idle');
-  };
-
-  // On each guided step Jiwo drifts to a new spot like it's leading the way,
-  // and the prompt text floats in — the mascot feels like a companion, not a decal.
-  useEffect(() => {
-    if (selectedPlace === null) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    const tweens: gsap.core.Tween[] = [];
-    if (guideMascotRef.current) {
-      tweens.push(
-        gsap.fromTo(
-          guideMascotRef.current,
-          { y: 10, opacity: 0.7 },
-          { y: 0, opacity: 1, duration: 0.9, ease: 'power2.out' }
-        )
-      );
-    }
-    if (promptCardRef.current) {
-      tweens.push(
-        gsap.fromTo(
-          promptCardRef.current,
-          { opacity: 0, y: 16, scale: 0.985 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: 'power3.out' }
-        )
-      );
-    }
-    return () => tweens.forEach((t) => t.kill());
-  }, [guideStep, selectedPlace]);
 
   const places = [
     {
@@ -129,6 +45,108 @@ export default function Visualization() {
     }
   ];
 
+  // The ambient 3D scene follows the mascot's emotional state
+  useEffect(() => {
+    setSceneMood(mascotState === 'happy' ? 'happy' : mascotState === 'calm' ? 'calm' : 'idle');
+    return () => setSceneMood('idle');
+  }, [mascotState]);
+
+  // Pre-load seluruh prompt Safe Place & Guided Sessions saat halaman dimuat (0ms Latency)
+  useEffect(() => {
+    const allSafePrompts = places.flatMap((p) => p.prompts);
+    preloadTts(allSafePrompts);
+
+    return () => {
+      stopSpeaking();
+    };
+  }, []);
+
+  // --- SAFE PLACE STATE ---
+  const [selectedPlace, setSelectedPlace] = useState<number | null>(null);
+  const [guideStep, setGuideStep] = useState(0);
+
+  // --- GUIDED SESSION CARDS ---
+  const [activeSession, setActiveSession] = useState<GuidedSession | null>(null);
+  const [sessionStep, setSessionStep] = useState(0);
+
+  // Pre-load prompt sesi terpandu yang sedang dipilih
+  useEffect(() => {
+    if (activeSession) {
+      preloadTts(activeSession.prompts);
+    }
+  }, [activeSession]);
+
+  // --- TEXT-TO-SPEECH (Gemini TTS dengan Request ID Token Discard Guard & Cache) ---
+  const [ttsOn, setTtsOn] = useState(() => localStorage.getItem('jiwo_tts') !== 'off');
+
+  const toggleTts = () => {
+    setTtsOn((prev) => {
+      const next = !prev;
+      localStorage.setItem('jiwo_tts', next ? 'on' : 'off');
+      if (!next) stopSpeaking();
+      return next;
+    });
+  };
+
+  // Voice the current guided-session prompt whenever the step changes
+  useEffect(() => {
+    if (!activeSession || !ttsOn) return;
+    speak(activeSession.prompts[sessionStep]);
+    return () => stopSpeaking();
+  }, [activeSession, sessionStep, ttsOn]);
+
+  // Voice the Safe Place prompts too
+  useEffect(() => {
+    if (selectedPlace === null || !ttsOn) return;
+    speak(places[selectedPlace].prompts[guideStep]);
+    return () => stopSpeaking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlace, guideStep, ttsOn]);
+
+  // Never keep talking after the user leaves the page
+  useEffect(() => () => stopSpeaking(), []);
+
+  const openSession = (s: GuidedSession) => {
+    stopSpeaking();
+    setActiveSession(s);
+    setSessionStep(0);
+    setMascotState(s.mascot as typeof mascotState);
+  };
+
+  const closeSession = (finished: boolean) => {
+    stopSpeaking();
+    setActiveSession(null);
+    setSessionStep(0);
+    setMascotState(finished ? 'happy' : 'idle');
+  };
+
+  // On each guided step Jiwo drifts to a new spot like it's leading the way
+  useEffect(() => {
+    if (selectedPlace === null) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const tweens: gsap.core.Tween[] = [];
+    if (guideMascotRef.current) {
+      tweens.push(
+        gsap.fromTo(
+          guideMascotRef.current,
+          { y: 10, opacity: 0.7 },
+          { y: 0, opacity: 1, duration: 0.9, ease: 'power2.out' }
+        )
+      );
+    }
+    if (promptCardRef.current) {
+      tweens.push(
+        gsap.fromTo(
+          promptCardRef.current,
+          { opacity: 0, y: 16, scale: 0.985 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: 'power3.out' }
+        )
+      );
+    }
+    return () => tweens.forEach((t) => t.kill());
+  }, [guideStep, selectedPlace]);
+
   // --- ANXIETY RELEASE STATE ---
   const [anxietyText, setAnxietyText] = useState('');
   const [isBlowing, setIsBlowing] = useState(false);
@@ -148,10 +166,8 @@ export default function Visualization() {
     // Wind puffs streaming from Jiwo toward the worry cloud
     const puffTimer = setInterval(() => {
       const puff = document.createElement('span');
-      puff.textContent = '💨';
-      puff.setAttribute('aria-hidden', 'true');
-      puff.style.cssText =
-        'position:absolute;left:60%;top:40%;font-size:20px;pointer-events:none;will-change:transform,opacity;';
+      puff.innerText = '💨';
+      puff.style.cssText = 'position:absolute;left:50%;top:40%;font-size:20px;pointer-events:none;will-change:transform,opacity;';
       el.appendChild(puff);
       gsap.fromTo(
         puff,
@@ -186,10 +202,11 @@ export default function Visualization() {
     setIsBlowing(true);
     setMascotState('calm');
 
-    // Simulate blowing animation (5 seconds)
-    // 0s to 3s: blowing wind
-    // 3s: complete fade out, swap mascot state to happy
-    // 5s: finish
+    // Speak comforting text while blowing anxiety away
+    if (ttsOn) {
+      speak('Tarik napas panjang... dan mari kita hembuskan pikiran ini bersama-sama hingga sirnah.');
+    }
+
     setTimeout(() => {
       setMascotState('happy');
       setBlowComplete(true);
@@ -201,6 +218,7 @@ export default function Visualization() {
   };
 
   const resetRelease = () => {
+    stopSpeaking();
     setAnxietyText('');
     setBlowComplete(false);
     setMascotState('idle');
@@ -232,6 +250,7 @@ export default function Visualization() {
         <div className="flex bg-white/70 p-1.5 rounded-2xl border border-jiwo-primaryLight/30 gap-1">
           <button
             onClick={() => {
+              stopSpeaking();
               setActiveMode('safe_place');
               setSelectedPlace(null);
               setMascotState('idle');
@@ -246,6 +265,7 @@ export default function Visualization() {
           </button>
           <button
             onClick={() => {
+              stopSpeaking();
               setActiveMode('release');
               resetRelease();
             }}
@@ -300,6 +320,7 @@ export default function Visualization() {
             <div className="flex gap-4 w-full">
               <button
                 onClick={() => {
+                  stopSpeaking();
                   if (sessionStep === 0) closeSession(false);
                   else setSessionStep(sessionStep - 1);
                 }}
@@ -310,6 +331,7 @@ export default function Visualization() {
 
               <button
                 onClick={() => {
+                  stopSpeaking();
                   if (sessionStep === activeSession.prompts.length - 1) closeSession(true);
                   else setSessionStep(sessionStep + 1);
                 }}
@@ -339,6 +361,7 @@ export default function Visualization() {
                 <button
                   key={idx}
                   onClick={() => {
+                    stopSpeaking();
                     setSelectedPlace(idx);
                     setGuideStep(0);
                     setMascotState('calm');
@@ -398,6 +421,7 @@ export default function Visualization() {
               <div className="flex gap-4 w-full">
                 <button
                   onClick={() => {
+                    stopSpeaking();
                     if (guideStep === 0) {
                       setSelectedPlace(null);
                       setMascotState('idle');
@@ -412,6 +436,7 @@ export default function Visualization() {
                 
                 <button
                   onClick={() => {
+                    stopSpeaking();
                     if (guideStep === places[selectedPlace].prompts.length - 1) {
                       setSelectedPlace(null);
                       setMascotState('happy');

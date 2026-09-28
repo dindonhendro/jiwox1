@@ -2,7 +2,7 @@
  * gemini-tts-helper.js
  * Modul pengganti Web Speech API (window.speechSynthesis)
  * Menggunakan Gemini TTS (gemini-2.5-flash-preview-tts / gemini-2.0-flash)
- * Dilengkapi dengan In-Memory Audio Caching untuk 0ms Latency & Audio Preloading
+ * Dilengkapi dengan In-Memory Audio Caching & Request ID Discard Guard
  */
 
 export const GEMINI_CONFIG = {
@@ -12,6 +12,7 @@ export const GEMINI_CONFIG = {
 };
 
 let currentAudioInstance = null;
+let activeRequestId = 0;
 const audioCache = new Map();
 
 function getCacheKey(text, voice) {
@@ -171,21 +172,28 @@ export async function speakText(text, options = {}) {
     }
 
     stopSpeech();
+    const thisRequestId = ++activeRequestId;
 
     try {
-        if (options.onStart) options.onStart();
+        if (options.onStart && thisRequestId === activeRequestId) options.onStart();
 
         const audioUrl = await generateAudioUrl(text, voiceName, apiKey, requestedModel);
+
+        if (thisRequestId !== activeRequestId) {
+            console.log(`[TTS Discarded] Request #${thisRequestId} dibuang karena user telah melakukan aksi baru (#${activeRequestId}).`);
+            return null;
+        }
+
         const audio = new Audio(audioUrl);
         currentAudioInstance = audio;
 
         audio.onended = () => {
-            currentAudioInstance = null;
-            if (options.onEnd) options.onEnd();
+            if (currentAudioInstance === audio) currentAudioInstance = null;
+            if (options.onEnd && thisRequestId === activeRequestId) options.onEnd();
         };
 
         audio.onerror = (err) => {
-            currentAudioInstance = null;
+            if (currentAudioInstance === audio) currentAudioInstance = null;
             if (options.onError) options.onError(err);
         };
 
@@ -199,6 +207,7 @@ export async function speakText(text, options = {}) {
 }
 
 export function stopSpeech() {
+    activeRequestId++;
     if (currentAudioInstance) {
         currentAudioInstance.pause();
         currentAudioInstance.currentTime = 0;

@@ -2,7 +2,7 @@
  * gemini-tts-helper.ts
  * Modul pengganti Web Speech API (window.speechSynthesis)
  * Menggunakan Gemini TTS (gemini-2.5-flash-preview-tts / gemini-2.0-flash)
- * Dilengkapi dengan In-Memory Audio Caching untuk 0ms Latency & Audio Preloading
+ * Dilengkapi dengan In-Memory Audio Caching & Request ID Discard Guard
  */
 
 export interface SpeakOptions {
@@ -21,11 +21,12 @@ export const GEMINI_CONFIG = {
       (import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.GEMINI_API_KEY)) ||
     "",
   model: "gemini-2.5-flash-preview-tts",
-  defaultVoice: "Sulafat", // Karakter suara wanita normal & hangat: Sulafat, Aoede, Erinome, Achird
+  defaultVoice: "Leda", // Karakter suara wanita normal & hangat: Sulafat, Aoede, Erinome, Achird
 };
 
-// State pemutar audio global & Cache Audio Blob (in-memory)
+// State pemutar audio global, Token Counter, & Cache Audio Blob (in-memory)
 let currentAudioInstance: HTMLAudioElement | null = null;
+let activeRequestId = 0; // Increment setiap kali ada request baru atau stopSpeech()
 const audioCache = new Map<string, string>(); // Cache Key -> Blob Object URL
 
 /**
@@ -204,12 +205,12 @@ export async function preloadTts(texts: string[], options: SpeakOptions = {}): P
 }
 
 /**
- * FUNGSI UTAMA: Memutar teks menggunakan Gemini TTS
+ * FUNGSI UTAMA: Memutar teks menggunakan Gemini TTS dengan Request ID Token Discard Guard
  * @param {string} text - Teks bahasa Indonesia yang ingin dibacakan
  * @param {object} options - Opsi opsional: voice, model, apiKey, onStart, onEnd, onError
- * @returns {Promise<HTMLAudioElement>}
+ * @returns {Promise<HTMLAudioElement | null>}
  */
-export async function speakText(text: string, options: SpeakOptions = {}): Promise<HTMLAudioElement> {
+export async function speakText(text: string, options: SpeakOptions = {}): Promise<HTMLAudioElement | null> {
   const voiceName = options.voice || GEMINI_CONFIG.defaultVoice;
   const apiKey = options.apiKey || GEMINI_CONFIG.apiKey;
   const requestedModel = options.model || GEMINI_CONFIG.model;
@@ -220,23 +221,31 @@ export async function speakText(text: string, options: SpeakOptions = {}): Promi
     throw err;
   }
 
-  // Hentikan audio yang sedang berjalan sebelumnya
+  // Hentikan audio yang sedang berjalan & buat Token Request ID baru
   stopSpeech();
+  const thisRequestId = ++activeRequestId;
 
   try {
-    if (options.onStart) options.onStart();
+    if (options.onStart && thisRequestId === activeRequestId) options.onStart();
 
     const audioUrl = await generateAudioUrl(text, voiceName, apiKey, requestedModel);
+
+    // DISCARD GUARD: Jika user sudah melakukan aksi baru/pindah tombol sebelum fetch selesai, buang hasilnya!
+    if (thisRequestId !== activeRequestId) {
+      console.log(`[TTS Discarded] Request #${thisRequestId} dibuang karena user telah melakukan aksi baru (#${activeRequestId}).`);
+      return null;
+    }
+
     const audio = new Audio(audioUrl);
     currentAudioInstance = audio;
 
     audio.onended = () => {
-      currentAudioInstance = null;
-      if (options.onEnd) options.onEnd();
+      if (currentAudioInstance === audio) currentAudioInstance = null;
+      if (options.onEnd && thisRequestId === activeRequestId) options.onEnd();
     };
 
     audio.onerror = (err) => {
-      currentAudioInstance = null;
+      if (currentAudioInstance === audio) currentAudioInstance = null;
       if (options.onError) options.onError(err);
     };
 
@@ -250,9 +259,10 @@ export async function speakText(text: string, options: SpeakOptions = {}): Promi
 }
 
 /**
- * Hentikan audio TTS yang sedang berjalan
+ * Hentikan audio TTS yang sedang berjalan & batalkan request pending
  */
 export function stopSpeech(): void {
+  activeRequestId++; // Invalidate pending in-flight requests immediately
   if (currentAudioInstance) {
     currentAudioInstance.pause();
     currentAudioInstance.currentTime = 0;
